@@ -6,7 +6,8 @@ namespace ut88
 	class Keypad4x4_portK
 	{
 	public:
-		static uint8_t getKeyCode()
+        inline __attribute__((always_inline))
+		static uint8_t GetKeyCode()
 		{
 			PORTK = 0xF7;
 			uint8_t PORTK_value = PINK;
