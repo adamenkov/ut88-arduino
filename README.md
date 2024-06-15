@@ -1,2 +1,2 @@
-# ut88giga
-Upgrade the 8080-based UT-88 (ЮТ-88) computer using an Arduino Giga.
+# ut88-arduino
+Build 8080-based retro computer UT-88 (ЮТ-88) using Arduino microcontrollers
