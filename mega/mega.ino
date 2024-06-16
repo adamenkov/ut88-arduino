@@ -33,7 +33,9 @@
 #include "ut88_keypad4x4.h"
 #include "lcd_keypad_shield.h"
 
+
 LiquidCrystal& lcd = LcdKeypadShield::GetLcd();
+
 
 namespace rom
 {
@@ -44,6 +46,7 @@ namespace rom
 
     enum { start = 0, end = start + sizeof bytes };
 }
+
 
 namespace ram
 {
@@ -81,10 +84,6 @@ void setup()
     TCNT1  = 0;
 
     sei();
-
-    delayMicroseconds(16000);
-
-    PORTD |= 0x80;      // digitalWrite(ut88::Z80::Pin::PIN_RESET_N, HIGH);
 }
 
 
@@ -92,9 +91,6 @@ void loop()
 {
     LcdKeypadShield::Button shieldButton;
     uint16_t addr;
-
-    PORTB &= 0xFD;      // digitalWrite(Pin::PIN_CLK, LOW);
-    delayMicroseconds(1);
 
     for (;;)
     {
@@ -118,15 +114,6 @@ void loop()
                         DATA_OUT = pgm_read_byte_near(rom::bytes + addr);
                     }
                 }
-                else if (addr < 0x9003)
-                {
-                    if (0x9000 <= addr)
-                    {
-                        static uint8_t xOffset[3] = { 0, 2, 5 };
-                        lcd.setCursor(xOffset[addr - 0x9000], 0);
-                        lcd.print(static_cast<uint8_t>(DATA_IN), HEX);
-                    }
-                }
                 else if (addr < ram::end)   // Assuming RAM (0xC000) goes after the LCD (0x9000)
                 {
                     if (ram::start <= addr)
@@ -137,9 +124,21 @@ void loop()
             }
             else if (WR_N == 0)
             {
-                if ((ram::start <= addr) && (addr < ram::end))
+                if (addr < 0x9003)
                 {
-                    ram::bytes[addr - ram::start] = DATA_IN;
+                    if (0x9000 <= addr)
+                    {
+                        static uint8_t xOffset[3] = { 0, 2, 5 };
+                        lcd.setCursor(xOffset[addr - 0x9000], 0);
+                        lcd.print(static_cast<uint8_t>(DATA_IN), HEX);
+                    }
+                }
+                else if (addr < ram::end)
+                {
+                    if (ram::start <= addr)
+                    {
+                        ram::bytes[addr - ram::start] = DATA_IN;
+                    }
                 }
             }
         }
@@ -163,17 +162,19 @@ void loop()
                 }
 
             }
-        }
-        else
-        {
-            // No access to pin M1, assuming an interrupt
-            
-            PORTB |= 0x08;      // digitalWrite(ut88::Z80::Pin::PIN_INT_N, HIGHjklhjhkljlklkjjklklj);
+            else if (WR_N == 0)
+            {
+            }
+            else
+            {
+                // No access to pin M1, probably an interrupt
+                PORTB |= 0x08;      // digitalWrite(ut88::Z80::Pin::PIN_INT_N, HIGH);
 
-            DATA_DIR = 0xFF;
-            DATA_OUT = 0xFF;    // RST 38 (RST 7)
+                DATA_DIR = 0xFF;
+                DATA_OUT = 0xFF;    // RST 38 (RST 7)
+            }
         }
-        
+
         if (shieldButton == LcdKeypadShield::Button::Right)
         {
             ut88::Z80::Reset();

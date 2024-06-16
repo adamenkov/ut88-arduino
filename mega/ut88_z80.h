@@ -114,9 +114,9 @@ namespace ut88
             PORTB &= 0xFD;      // digitalWrite(ut88::Z80::Pin::PIN_CLK, LOW);
             delayMicroseconds(1);
 
-            PORTB |= 0x02;      // digitalWrite(ut88::Z80::Pin::PIN_CLK, HIGH);
-
             PORTD |= 0x80;      // digitalWrite(ut88::Z80::Pin::PIN_RESET_N, HIGH);
+
+            PORTB |= 0x02;      // digitalWrite(ut88::Z80::Pin::PIN_CLK, HIGH);
             
             sei();
         }
