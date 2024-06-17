@@ -29,6 +29,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include <EEPROM.h>
+
 #include "ut88_z80.h"
 #include "ut88_keypad4x4.h"
 #include "lcd_keypad_shield.h"
@@ -66,7 +68,7 @@ void setup()
     ut88::Z80::Init();
 
     lcd.begin(16, 2);
-    lcd.print("FFFF");
+    lcd.print("FFFF ??   tape=0");
 
     cli();
 
@@ -93,6 +95,8 @@ void loop()
     LcdKeypadShield::Button shieldButton = LcdKeypadShield::Button::None;
     uint16_t lcd_counter = 0;
 
+    uint8_t tape = 0;
+
     uint16_t addr = 0x0000;
 
     uint8_t prevIORQ_N = IORQ_N;
@@ -105,6 +109,40 @@ void loop()
         if (++lcd_counter == 0)
         {
             shieldButton = LcdKeypadShield::GetPressedButton();
+
+            switch (shieldButton)
+            {
+            case LcdKeypadShield::Button::Left:
+                shieldButton = LcdKeypadShield::Button::None;
+                tape = (++tape) % 4;
+                lcd.setCursor(15, 0);
+                lcd.print(tape);
+                delayMicroseconds(16000);
+                break;
+
+            case LcdKeypadShield::Button::Up:
+                shieldButton = LcdKeypadShield::Button::None;
+                lcd.setCursor(0, 1);
+                lcd.print("Uploading...");
+                EEPROM.put(tape * sizeof ram::bytes, ram::bytes);
+                lcd.setCursor(0, 1);
+                lcd.print("            ");
+                break;
+
+            case LcdKeypadShield::Button::Down:
+                shieldButton = LcdKeypadShield::Button::None;
+                lcd.setCursor(0, 1);
+                lcd.print("Downloading...");
+                EEPROM.get(tape * sizeof ram::bytes, ram::bytes);
+                lcd.setCursor(0, 1);
+                lcd.print("              ");
+                break;
+
+            case LcdKeypadShield::Button::Right:
+                shieldButton = LcdKeypadShield::Button::None;
+                ut88::Z80::Reset();
+                continue;
+            }
         }
 
         addr = ADDR;
@@ -120,7 +158,7 @@ void loop()
                 {
                     DATA_OUT = rom::bytes[addr];
                 }
-                else if (addr < ram::end)   // Assuming RAM (0xC000) goes after the LCD (0x9000)
+                else if (addr < ram::end)   // Assuming RAM (0xC000) goes after the ROM (0x0000)
                 {
                     if (ram::start <= addr)
                     {
@@ -166,7 +204,7 @@ void loop()
                         lcd.print(digits[DATA_IN]);
                     }
                 }
-                else if (addr < ram::end)
+                else if (addr < ram::end)   // Assuming RAM (0xC000) goes after the LCD (0x9000)
                 {
                     if (ram::start <= addr)
                     {
@@ -212,13 +250,6 @@ void loop()
                 DATA_DIR = 0xFF;
                 DATA_OUT = 0xFF;    // RST 38 (RST 7)
             }
-        }
-
-        if (shieldButton == LcdKeypadShield::Button::Right)
-        {
-            shieldButton = LcdKeypadShield::Button::None;
-            ut88::Z80::Reset();
-            continue;
         }
 
         ut88::Z80::ResetClock();
