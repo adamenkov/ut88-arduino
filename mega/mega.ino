@@ -39,7 +39,7 @@ LiquidCrystal& lcd = LcdKeypadShield::GetLcd();
 
 namespace rom
 {
-    PROGMEM const uint8_t bytes[] =
+    const uint8_t bytes[] =
     {
     #include "monitor.h"
     };
@@ -67,7 +67,7 @@ void setup()
 
     lcd.begin(16, 2);
     lcd.print("FFFF");
-    
+
     cli();
 
     // Timer frequency is 1,024 times lower than the main clock frequency (16 MHz / 1,024).
@@ -91,6 +91,8 @@ void setup()
 void loop()
 {
     LcdKeypadShield::Button shieldButton = LcdKeypadShield::Button::None;
+    uint16_t lcd_counter = 0;
+
     uint16_t addr = 0x0000;
 
     uint8_t prevIORQ_N = IORQ_N;
@@ -100,7 +102,10 @@ void loop()
     {
         ut88::Z80::SetClock();
         
-        shieldButton = LcdKeypadShield::GetPressedButton();
+        if (++lcd_counter == 0)
+        {
+            shieldButton = LcdKeypadShield::GetPressedButton();
+        }
 
         addr = ADDR;
         
@@ -113,14 +118,7 @@ void loop()
                 // Assuming ROM starts at 0x0000 for optimization
                 if (addr < rom::end)
                 {
-                    {
-                        if (addr == 0x38)
-                        {
-                            PORTB |= 0x08;      // digitalWrite(ut88::Z80::Pin::PIN_INT_N, HIGH);
-                        }
-
-                        DATA_OUT = pgm_read_byte_near(rom::bytes + addr);
-                    }
+                    DATA_OUT = rom::bytes[addr];
                 }
                 else if (addr < ram::end)   // Assuming RAM (0xC000) goes after the LCD (0x9000)
                 {
@@ -194,6 +192,8 @@ void loop()
                         DATA_OUT = prevDATA = (shieldButton == LcdKeypadShield::Button::Select)
                             ? 0x80
                             : ut88::Keypad4x4_portK::GetKeyCode();
+
+                        shieldButton = LcdKeypadShield::Button::None;
                     }
                     else
                     {
@@ -216,15 +216,15 @@ void loop()
 
         if (shieldButton == LcdKeypadShield::Button::Right)
         {
+            shieldButton = LcdKeypadShield::Button::None;
             ut88::Z80::Reset();
             continue;
         }
 
-        prevIORQ_N = IORQ_N;
-
         ut88::Z80::ResetClock();
-        ++addr; // dummy activity
+
         DATA_DIR = 0x00;
-        delayMicroseconds(1);
+        
+        prevIORQ_N = IORQ_N;
     }
 }
