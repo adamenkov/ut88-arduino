@@ -116,8 +116,6 @@ namespace ut88
             SetClock();
             delayMicroseconds(1);
 
-            //ms_justReset = true;
-
             ResetClock();
             delayMicroseconds(1);
 
@@ -179,10 +177,6 @@ namespace ut88
         {
             PORTB |= 0x04;      // digitalWrite(ut88::Z80::Pin::PIN_NMI_N, HIGH);
         }
-
-
-
-        //static bool ms_justReset;
 	};
 
     //bool Z80::ms_justReset = false;

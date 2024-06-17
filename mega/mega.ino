@@ -43,7 +43,7 @@ namespace rom
 {
     const uint8_t bytes[] =
     {
-    #include "monitor.h"
+#include "monitor.h"
     };
 
     enum { start = 0, end = start + sizeof bytes };
@@ -90,6 +90,20 @@ void setup()
 }
 
 
+void pause()
+{
+    // Good old way to spend some time
+    volatile int i = 0;
+    while (++i != 0)
+    {
+        volatile int8_t j = 30;
+        while (--j != 0)
+        {
+        }
+    }
+}
+
+
 void loop()
 {
     LcdKeypadShield::Button shieldButton = LcdKeypadShield::Button::None;
@@ -125,6 +139,7 @@ void loop()
                 lcd.setCursor(0, 1);
                 lcd.print("Uploading...");
                 EEPROM.put(tape * sizeof ram::bytes, ram::bytes);
+                pause();
                 lcd.setCursor(0, 1);
                 lcd.print("            ");
                 break;
@@ -134,6 +149,7 @@ void loop()
                 lcd.setCursor(0, 1);
                 lcd.print("Downloading...");
                 EEPROM.get(tape * sizeof ram::bytes, ram::bytes);
+                pause();
                 lcd.setCursor(0, 1);
                 lcd.print("              ");
                 break;
