@@ -66,7 +66,8 @@ void setup()
     ut88::Z80::Init();
 
     lcd.begin(16, 2);
-
+    lcd.print("FFFF");
+    
     cli();
 
     // Timer frequency is 1,024 times lower than the main clock frequency (16 MHz / 1,024).
