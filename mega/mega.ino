@@ -56,16 +56,16 @@ namespace ram
 
 
 ISR(TIMER1_COMPA_vect)
-{ 
-    PORTB &= 0xF7;      // digitalWrite(ut88::Z80::Pin::PIN_INT_N, LOW);
+{
+    ut88::Z80::SetInt();
 }
 
 
 void setup()
 {
-    lcd.begin(16, 2);
-
     ut88::Z80::Init();
+
+    lcd.begin(16, 2);
 
     cli();
 
@@ -74,7 +74,7 @@ void setup()
     TCCR1A = 0;
     TCCR1B = (1 << WGM12) | (1 << CS12) | (1 << CS10);
 
-    // 15,625 ticks of the timer frequency (16 MHz / 1,024) is exactly one second
+    // 15,625 ticks of the timer at frequency (16 MHz / 1,024) is exactly one second
     OCR1A = 15625;
 
     // Enable timer compare interrupt
@@ -89,12 +89,15 @@ void setup()
 
 void loop()
 {
-    LcdKeypadShield::Button shieldButton;
-    uint16_t addr;
+    LcdKeypadShield::Button shieldButton = LcdKeypadShield::Button::None;
+    uint16_t addr = 0x0000;
+
+    uint8_t prevIORQ_N = IORQ_N;
+    uint8_t prevDATA = 0xFF;
 
     for (;;)
     {
-        PORTB |= 0x02;      // digitalWrite(ut88::Z80::Pin::PIN_CLK, HIGH);
+        ut88::Z80::SetClock();
         
         shieldButton = LcdKeypadShield::GetPressedButton();
 
@@ -109,8 +112,12 @@ void loop()
                 // Assuming ROM starts at 0x0000 for optimization
                 if (addr < rom::end)
                 {
-                    if (rom::start <= addr)
                     {
+                        if (addr == 0x38)
+                        {
+                            PORTB |= 0x08;      // digitalWrite(ut88::Z80::Pin::PIN_INT_N, HIGH);
+                        }
+
                         DATA_OUT = pgm_read_byte_near(rom::bytes + addr);
                     }
                 }
@@ -121,6 +128,10 @@ void loop()
                         DATA_OUT = ram::bytes[addr - ram::start];
                     }
                 }
+                else
+                {
+                    DATA_OUT = 0xFF;
+                }
             }
             else if (WR_N == 0)
             {
@@ -128,9 +139,32 @@ void loop()
                 {
                     if (0x9000 <= addr)
                     {
-                        static uint8_t xOffset[3] = { 0, 2, 5 };
+                        static uint8_t xOffset[3] = { 5, 2, 0 };
                         lcd.setCursor(xOffset[addr - 0x9000], 0);
-                        lcd.print(static_cast<uint8_t>(DATA_IN), HEX);
+
+                        static const char* digits[256] =
+                        {
+                            "00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "0A", "0B", "0C", "0D", "0E", "0F",
+                            "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "1A", "1B", "1C", "1D", "1E", "1F",
+                            "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "2A", "2B", "2C", "2D", "2E", "2F",
+                            "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "3A", "3B", "3C", "3D", "3E", "3F",
+
+                            "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "4A", "4B", "4C", "4D", "4E", "4F",
+                            "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "5A", "5B", "5C", "5D", "5E", "5F",
+                            "60", "61", "62", "63", "64", "65", "66", "67", "68", "69", "6A", "6B", "6C", "6D", "6E", "6F",
+                            "70", "71", "72", "73", "74", "75", "76", "77", "78", "79", "7A", "7B", "7C", "7D", "7E", "7F",
+
+                            "80", "81", "82", "83", "84", "85", "86", "87", "88", "89", "8A", "8B", "8C", "8D", "8E", "8F",
+                            "90", "91", "92", "93", "94", "95", "96", "97", "98", "99", "9A", "9B", "9C", "9D", "9E", "9F",
+                            "A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "AA", "AB", "AC", "AD", "AE", "AF",
+                            "B0", "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9", "BA", "BB", "BC", "BD", "BE", "BF",
+
+                            "C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "CA", "CB", "CC", "CD", "CE", "CF",
+                            "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "DA", "DB", "DC", "DD", "DE", "DF",
+                            "E0", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9", "EA", "EB", "EC", "ED", "EE", "EF",
+                            "F0", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "FA", "FB", "FC", "FD", "FE", "FF"
+                        };
+                        lcd.print(digits[DATA_IN]);
                     }
                 }
                 else if (addr < ram::end)
@@ -143,24 +177,28 @@ void loop()
             }
         }
         else if (IORQ_N == 0)
-        {    
+        {   
             if (RD_N == 0)
             {
                 DATA_DIR = 0xFF;
 
-                if (ADDR_L == 0xA0)
+                if (prevIORQ_N == 0)
                 {
-                    uint8_t keyCode = ut88::Keypad4x4_portK::GetKeyCode();
-                    if (keyCode != 0x00)
+                    DATA_OUT = prevDATA;
+                }
+                else
+                {
+                    if (ADDR_L == 0xA0)
                     {
-                        DATA_OUT = keyCode;
+                        DATA_OUT = prevDATA = (shieldButton == LcdKeypadShield::Button::Select)
+                            ? 0x80
+                            : ut88::Keypad4x4_portK::GetKeyCode();
                     }
-                    else if (shieldButton == LcdKeypadShield::Button::Select)
+                    else
                     {
-                        DATA_OUT = 0x80;
+                        DATA_OUT = 0xFF;
                     }
                 }
-
             }
             else if (WR_N == 0)
             {
@@ -168,7 +206,7 @@ void loop()
             else
             {
                 // No access to pin M1, probably an interrupt
-                PORTB |= 0x08;      // digitalWrite(ut88::Z80::Pin::PIN_INT_N, HIGH);
+                ut88::Z80::ResetInt();
 
                 DATA_DIR = 0xFF;
                 DATA_OUT = 0xFF;    // RST 38 (RST 7)
@@ -181,7 +219,10 @@ void loop()
             continue;
         }
 
-        PORTB &= 0xFD;      // digitalWrite(ut88::Z80::Pin::PIN_CLK, LOW);
+        prevIORQ_N = IORQ_N;
+
+        ut88::Z80::ResetClock();
+        ++addr; // dummy activity
         DATA_DIR = 0x00;
         delayMicroseconds(1);
     }

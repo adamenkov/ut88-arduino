@@ -67,23 +67,27 @@ namespace ut88
         };
 
 
+        inline __attribute__((always_inline))
         static void Init()
         {
             DATA_DIR = 0x00;
             ADDR_H_DIR = 0x00;
             ADDR_L_DIR = 0x00;
 
-            pinMode(Pin::PIN_RESET_N, OUTPUT);
-            pinMode(Pin::PIN_CLK, OUTPUT);
+            // pinMode(Pin::PIN_RD_N, INPUT);   // PB0
+            // pinMode(Pin::PIN_CLK, OUTPUT);   // PB1
+            // pinMode(Pin::PIN_NMI_N, OUTPUT); // PB2
+            // pinMode(Pin::PIN_INT_N, OUTPUT); // PB3
+            DDRB &= 0xFE;
+            DDRB |= 0x0E;
+            
+            // pinMode(Pin::PIN_RESET_N, OUTPUT);   // PD7
+            DDRD |= 0x80;
 
-            pinMode(Pin::PIN_MREQ_N, INPUT);
-            pinMode(Pin::PIN_IORQ_N, INPUT);
-
-            pinMode(Pin::PIN_RD_N, INPUT);
-            pinMode(Pin::PIN_WR_N, INPUT);
-
-            pinMode(Pin::PIN_INT_N, OUTPUT);
-            pinMode(Pin::PIN_NMI_N, OUTPUT);
+            // pinMode(Pin::PIN_MREQ_N, INPUT);     // PG0
+            // pinMode(Pin::PIN_WR_N, INPUT);       // PG1
+            // pinMode(Pin::PIN_IORQ_N, INPUT);     // PG2
+            DDRG &= 0xF8;
 
             Reset();
         }
@@ -96,29 +100,90 @@ namespace ut88
 
             cli();
 
-            PORTD &= 0x7F;      // digitalWrite(Pin::PIN_RESET_N, LOW);
-            PORTB |= 0x0C;      // digitalWrite(Pin::PIN_INT_N, HIGH); digitalWrite(Pin::PIN_NMI_N, HIGH);
+            SetReset();
+            ResetInt();
+            ResetNmi();
 
-            PORTB &= 0xFD;      // digitalWrite(ut88::Z80::Pin::PIN_CLK, LOW);
+            ResetClock();
             delayMicroseconds(1);
 
-            PORTB |= 0x02;      // digitalWrite(ut88::Z80::Pin::PIN_CLK, HIGH);
+            SetClock();
             delayMicroseconds(1);
 
-            PORTB &= 0xFD;      // digitalWrite(ut88::Z80::Pin::PIN_CLK, LOW);
+            ResetClock();
             delayMicroseconds(1);
 
-            PORTB |= 0x02;      // digitalWrite(ut88::Z80::Pin::PIN_CLK, HIGH);
+            SetClock();
             delayMicroseconds(1);
 
-            PORTB &= 0xFD;      // digitalWrite(ut88::Z80::Pin::PIN_CLK, LOW);
+            //ms_justReset = true;
+
+            ResetClock();
             delayMicroseconds(1);
 
-            PORTD |= 0x80;      // digitalWrite(ut88::Z80::Pin::PIN_RESET_N, HIGH);
+            ResetReset();
 
-            PORTB |= 0x02;      // digitalWrite(ut88::Z80::Pin::PIN_CLK, HIGH);
+            SetClock();
             
             sei();
         }
+
+
+        inline __attribute__((always_inline))
+        static void SetClock()
+        {
+            PORTB |= 0x02;      // digitalWrite(ut88::Z80::Pin::PIN_CLK, HIGH);
+        }
+
+        inline __attribute__((always_inline))
+        static void ResetClock()
+        {
+            PORTB &= 0xFD;      // digitalWrite(ut88::Z80::Pin::PIN_CLK, LOW);
+        }
+
+
+        inline __attribute__((always_inline))
+        static void SetReset()
+        {
+            PORTD &= 0x7F;      // digitalWrite(Pin::PIN_RESET_N, LOW);
+        }
+
+        inline __attribute__((always_inline))
+        static void ResetReset()
+        {
+            PORTD |= 0x80;      // digitalWrite(ut88::Z80::Pin::PIN_RESET_N, HIGH);
+        }
+
+
+        inline __attribute__((always_inline))
+        static void SetInt()
+        {
+            PORTB &= 0xF7;      // digitalWrite(ut88::Z80::Pin::PIN_INT_N, LOW);
+        }
+
+        inline __attribute__((always_inline))
+        static void ResetInt()
+        {
+            PORTB |= 0x08;      // digitalWrite(ut88::Z80::Pin::PIN_INT_N, HIGH);
+        }
+
+
+        inline __attribute__((always_inline))
+        static void SetNmi()
+        {
+            PORTB &= 0xFB;      // digitalWrite(ut88::Z80::Pin::PIN_NMI_N, LOW);
+        }
+
+        inline __attribute__((always_inline))
+        static void ResetNmi()
+        {
+            PORTB |= 0x04;      // digitalWrite(ut88::Z80::Pin::PIN_NMI_N, HIGH);
+        }
+
+
+
+        //static bool ms_justReset;
 	};
+
+    //bool Z80::ms_justReset = false;
 }

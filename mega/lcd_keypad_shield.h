@@ -12,7 +12,7 @@ public:
     inline __attribute__((always_inline))
     static Button GetPressedButton()
     {
-        static const int analogKeys[] = { 760, 535, 360, 300, 30 };
+        static const int analogKeys[] = { 760, 535, 420, 300, 30 };
         
         const int analogKey = analogRead(A0);
         
