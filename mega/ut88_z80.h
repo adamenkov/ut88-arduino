@@ -178,6 +178,4 @@ namespace ut88
             PORTB |= 0x04;      // digitalWrite(ut88::Z80::Pin::PIN_NMI_N, HIGH);
         }
 	};
-
-    //bool Z80::ms_justReset = false;
 }
