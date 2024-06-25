@@ -57,7 +57,7 @@ void loop()
 
 void onReceive(int)
 {
-    for (int n = Wire.available(); n >= 3;)
+    for (int n = Wire.available(); n >= 3; n = Wire.available())
     {
         uint16_t b = static_cast<uint16_t>(Wire.read());
         if ((0xE0 <= b) && (b < 0xE8))
