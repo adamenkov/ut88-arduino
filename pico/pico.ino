@@ -12,7 +12,7 @@ uint16_t display_top;
 enum : uint16_t
 {
     text_display_width = 64,
-    text_display_height = 28,
+    text_display_height = 30,
 
     character_width = 6,
     character_height = 8,
@@ -60,9 +60,9 @@ void onReceive(int)
     for (int n = Wire.available(); n >= 3; n = Wire.available())
     {
         uint16_t b = static_cast<uint16_t>(Wire.read());
-        if ((0xE0 <= b) && (b < 0xE8))
+        if ((0xE0 <= b) && (b < 0xF0))
         {
-            uint16_t addr = ((b & 0x000F) << 8) | (static_cast<uint16_t>(Wire.read()) & 0x00FF);
+            uint16_t addr = ((b & 0x0007) << 8) | (static_cast<uint16_t>(Wire.read()) & 0x00FF);
             uint8_t ch = static_cast<uint16_t>(Wire.read()) & 0x00FF;
             display.drawBitmap(
                 display_left + character_width * (addr % text_display_width),

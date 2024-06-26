@@ -81,7 +81,7 @@ namespace ram
     namespace screen
     {
         uint8_t bytes[2048];
-        enum { start = 0xE000, end = start + sizeof bytes };
+        enum { start = 0xE000, end = start + 2 * sizeof bytes };
     }
 
     namespace monitor_f
@@ -227,7 +227,7 @@ void loop()
                 {
                     if (ram::screen::start <= addr)
                     {
-                        DATA_OUT = ram::screen::bytes[addr - ram::screen::start];
+                        DATA_OUT = ram::screen::bytes[(addr - ram::screen::start) & 0x7FF];
                     }
                 }
                 else if (addr < ram::monitor_f::end)   // Assuming Monitor-F's RAM starts at 0xF400
@@ -298,7 +298,7 @@ void loop()
                 {
                     if (ram::screen::start <= addr)
                     {
-                        ram::screen::bytes[addr - ram::screen::start] = DATA_IN;
+                        ram::screen::bytes[(addr - ram::screen::start) & 0x7FF] = DATA_IN;
 
                         Wire.beginTransmission(0x33);
                         Wire.write(uint8_t(highByte(addr)));
