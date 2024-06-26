@@ -3,7 +3,7 @@
 
 
 DVIGFX1 display(DVI_RES_640x480p60, false, adafruit_feather_dvi_cfg);
-//DVIGFX16 display(DVI_RES_400x240p60, adafruit_feather_dvi_cfg);
+//DVIGFX1 display(DVI_RES_400x240p60, false, adafruit_feather_dvi_cfg);
 
 uint16_t display_left;
 uint16_t display_top;
