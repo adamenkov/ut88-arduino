@@ -328,7 +328,15 @@ void loop()
                 }
                 else
                 {
-                    if (ADDR_L == 0xA0)
+                    if (ADDR_L == 0x05)     // 8852, port C
+                    {
+                        DATA_OUT = prevDATA = 0x07;
+                    }
+                    else if (ADDR_L == 0x06) // 8852, port B
+                    {
+                        DATA_OUT = prevDATA = 0x7F;
+                    }
+                    else if (ADDR_L == 0xA0)
                     {
                         DATA_OUT = prevDATA = (shieldButton == LcdKeypadShield::Button::Select)
                             ? 0x80
@@ -338,7 +346,7 @@ void loop()
                     }
                     else
                     {
-                        DATA_OUT = 0xFF;
+                        DATA_OUT = prevDATA = 0xFF;
                     }
                 }
             }

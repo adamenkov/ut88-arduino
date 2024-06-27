@@ -64,14 +64,15 @@ void onReceive(int)
         {
             uint16_t addr = ((b & 0x0007) << 8) | (static_cast<uint16_t>(Wire.read()) & 0x00FF);
             uint8_t ch = static_cast<uint16_t>(Wire.read()) & 0x00FF;
+
             display.drawBitmap(
                 display_left + character_width * (addr % text_display_width),
                 display_top + character_height * (addr / text_display_width),
-                font + 8 * ch,
+                font + 8 * (ch & 0x7F),
                 character_width,
                 character_height,
-                0xFFFF,
-                0x0000
+                (ch <= 0x7f) ? 0xFFFF : 0x0000,
+                (ch <= 0x7f) ? 0x0000 : 0xFFFF
             );
         }
     }
