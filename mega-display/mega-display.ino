@@ -209,33 +209,21 @@ void loop()
                 {
                     DATA_OUT = pgm_read_byte_near(rom::monitor_0::bytes + addr);
                 }
-                else if (addr < ram::extra::end)   // Assuming extra RAM starts at 0x3000
+                else if ((addr < ram::extra::end) && (ram::extra::start <= addr))   // Assuming extra RAM starts at 0x3000
                 {
-                    if (ram::extra::start <= addr)
-                    {
-                        DATA_OUT = ram::extra::bytes[addr - ram::extra::start];
-                    }
+                    DATA_OUT = ram::extra::bytes[addr - ram::extra::start];
                 }
-                else if (addr < ram::monitor_0::end)   // Assuming Monitor-0's RAM starts at 0xC000
+                else if ((addr < ram::monitor_0::end) && (ram::monitor_0::start <= addr))   // Assuming Monitor-0's RAM starts at 0xC000
                 {
-                    if (ram::monitor_0::start <= addr)
-                    {
-                        DATA_OUT = ram::monitor_0::bytes[addr - ram::monitor_0::start];
-                    }
+                    DATA_OUT = ram::monitor_0::bytes[addr - ram::monitor_0::start];
                 }
-                else if (addr < ram::screen::end)   // Assuming screen RAM starts at 0xE000
+                else if ((addr < ram::screen::end) && (ram::screen::start <= addr))   // Assuming screen RAM starts at 0xE000
                 {
-                    if (ram::screen::start <= addr)
-                    {
-                        DATA_OUT = ram::screen::bytes[(addr - ram::screen::start) & 0x7FF];
-                    }
+                    DATA_OUT = ram::screen::bytes[(addr - ram::screen::start) & 0x7FF];
                 }
-                else if (addr < ram::monitor_f::end)   // Assuming Monitor-F's RAM starts at 0xF400
+                else if ((addr < ram::monitor_f::end) && (ram::monitor_f::start <= addr))  // Assuming Monitor-F's RAM starts at 0xF400
                 {
-                    if (ram::monitor_f::start <= addr)
-                    {
-                        DATA_OUT = ram::monitor_f::bytes[addr - ram::monitor_f::start];
-                    }
+                    DATA_OUT = ram::monitor_f::bytes[addr - ram::monitor_f::start];
                 }
                 else if (rom::monitor_f::start <= addr)
                 {

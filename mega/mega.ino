@@ -180,6 +180,10 @@ void loop()
                     {
                         DATA_OUT = ram::bytes[addr - ram::start];
                     }
+                    else
+                    {
+                        DATA_OUT = 0xFF;
+                    }
                 }
                 else
                 {
