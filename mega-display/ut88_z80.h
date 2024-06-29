@@ -87,7 +87,9 @@ namespace ut88
             // pinMode(Pin::PIN_MREQ_N, INPUT);     // PG0
             // pinMode(Pin::PIN_WR_N, INPUT);       // PG1
             // pinMode(Pin::PIN_IORQ_N, INPUT);     // PG2
-            DDRG &= 0xF8;
+            // Also, I use PG5 to request Z80 reset
+            DDRG &= 0xD8;
+            PORTG |= 0x20;
 
             Reset();
         }

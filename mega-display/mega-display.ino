@@ -33,11 +33,7 @@
 #include <Wire.h>
 
 #include "ut88_z80.h"
-#include "ut88_keypad4x4.h"
-#include "lcd_keypad_shield.h"
-
-
-LiquidCrystal& lcd = LcdKeypadShield::GetLcd();
+#include "ut88_keyboard.h"
 
 
 namespace rom
@@ -100,10 +96,9 @@ ISR(TIMER1_COMPA_vect)
 
 void setup()
 {
-    ut88::Z80::Init();
+    Serial.begin(9600);
 
-    lcd.begin(16, 2);
-    lcd.print("FFFF ??   tape=0");
+    ut88::Z80::Init();
 
     cli();
 
@@ -122,6 +117,7 @@ void setup()
     TCNT1  = 0;
 
     Wire.begin();
+    Wire.setClock(400000);
 
     sei();
 }
@@ -143,20 +139,38 @@ void pause()
 
 void loop()
 {
-    LcdKeypadShield::Button shieldButton = LcdKeypadShield::Button::None;
-    uint16_t lcd_counter = 0;
+    uint16_t keyboard_counter = 0;
+    uint8_t screen_counter = 0;
 
     uint16_t addr = 0x0000;
 
     uint8_t prevIORQ_N = IORQ_N;
     uint8_t prevDATA = 0xFF;
 
+    uint8_t portA = 0xFF;
+
     for (;;)
     {
         ut88::Z80::SetClock();
         
-        if (++lcd_counter == 0)
+        if (++keyboard_counter == 0)
         {
+            if (PING & 0x20 == 0)
+            {
+                ut88::Z80::Reset();
+                continue;
+            }
+
+            if (++screen_counter == 0)
+            {
+                Wire.beginTransmission(0x33);
+                Wire.write(ram::screen::bytes, sizeof ram::screen::bytes);
+                Wire.endTransmission();
+            }
+
+            ut88::Keyboard::Poll();
+
+            /*
             shieldButton = LcdKeypadShield::GetPressedButton();
 
             switch (shieldButton)
@@ -194,6 +208,7 @@ void loop()
                 ut88::Z80::Reset();
                 continue;
             }
+            */
         }
 
         addr = ADDR;
@@ -243,38 +258,6 @@ void loop()
                         ram::extra::bytes[addr - ram::extra::start] = DATA_IN;
                     }
                 }
-                else if (addr < 0x9003)
-                {
-                    if (0x9000 <= addr)
-                    {
-                        static uint8_t xOffset[3] = { 5, 2, 0 };
-                        lcd.setCursor(xOffset[addr - 0x9000], 0);
-
-                        static const char* digits[256] =
-                        {
-                            "00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "0A", "0B", "0C", "0D", "0E", "0F",
-                            "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "1A", "1B", "1C", "1D", "1E", "1F",
-                            "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "2A", "2B", "2C", "2D", "2E", "2F",
-                            "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "3A", "3B", "3C", "3D", "3E", "3F",
-
-                            "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "4A", "4B", "4C", "4D", "4E", "4F",
-                            "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "5A", "5B", "5C", "5D", "5E", "5F",
-                            "60", "61", "62", "63", "64", "65", "66", "67", "68", "69", "6A", "6B", "6C", "6D", "6E", "6F",
-                            "70", "71", "72", "73", "74", "75", "76", "77", "78", "79", "7A", "7B", "7C", "7D", "7E", "7F",
-
-                            "80", "81", "82", "83", "84", "85", "86", "87", "88", "89", "8A", "8B", "8C", "8D", "8E", "8F",
-                            "90", "91", "92", "93", "94", "95", "96", "97", "98", "99", "9A", "9B", "9C", "9D", "9E", "9F",
-                            "A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "AA", "AB", "AC", "AD", "AE", "AF",
-                            "B0", "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9", "BA", "BB", "BC", "BD", "BE", "BF",
-
-                            "C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "CA", "CB", "CC", "CD", "CE", "CF",
-                            "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "DA", "DB", "DC", "DD", "DE", "DF",
-                            "E0", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9", "EA", "EB", "EC", "ED", "EE", "EF",
-                            "F0", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "FA", "FB", "FC", "FD", "FE", "FF"
-                        };
-                        lcd.print(digits[DATA_IN]);
-                    }
-                }
                 else if (addr < ram::monitor_0::end)   // Assuming Monitor-0's RAM starts at 0xC000
                 {
                     if (ram::monitor_0::start <= addr)
@@ -318,19 +301,11 @@ void loop()
                 {
                     if (ADDR_L == 0x05)     // 8852, port C
                     {
-                        DATA_OUT = prevDATA = 0x07;
+                        DATA_OUT = prevDATA = ut88::Keyboard::GetPortC();
                     }
                     else if (ADDR_L == 0x06) // 8852, port B
                     {
-                        DATA_OUT = prevDATA = 0x7F;
-                    }
-                    else if (ADDR_L == 0xA0)
-                    {
-                        DATA_OUT = prevDATA = (shieldButton == LcdKeypadShield::Button::Select)
-                            ? 0x80
-                            : ut88::Keypad4x4_portK::GetKeyCode();
-
-                        shieldButton = LcdKeypadShield::Button::None;
+                        DATA_OUT = prevDATA = (ut88::Keyboard::GetPortA() == portA) ? ut88::Keyboard::GetPortB() : 0x7F;
                     }
                     else
                     {
@@ -340,6 +315,10 @@ void loop()
             }
             else if (WR_N == 0)
             {
+                if (ADDR_L == 0x07) // 8852, port A
+                {
+                    portA = DATA_IN;
+                }
             }
             else
             {

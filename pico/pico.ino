@@ -3,7 +3,7 @@
 
 
 DVIGFX1 display(DVI_RES_640x480p60, false, adafruit_feather_dvi_cfg);
-//DVIGFX1 display(DVI_RES_400x240p60, false, adafruit_feather_dvi_cfg);
+//DVIGFX1 display(DVI_RES_400x240p60, false, adafruit_feather_dvi_cfg, VREG_VOLTAGE_1_30);
 
 uint16_t display_left;
 uint16_t display_top;
@@ -67,11 +67,11 @@ void onReceive(int)
             uint8_t ch = static_cast<uint16_t>(Wire.read()) & 0x00FF;
 
             display.drawBitmap(
-                display_left + character_width * (addr % text_display_width),
-                display_top + character_height * (addr / text_display_width),
+                display_left + CHARACTER_WIDTH * (addr % TEXT_DISPLAY_WIDTH),
+                display_top + CHARACTER_HEIGHT * (addr / TEXT_DISPLAY_WIDTH),
                 font + 8 * (ch & 0x7F),
-                character_width,
-                character_height,
+                CHARACTER_WIDTH,
+                CHARACTER_HEIGHT,
                 (ch <= 0x7f) ? 0xFFFF : 0x0000,
                 (ch <= 0x7f) ? 0x0000 : 0xFFFF
             );
