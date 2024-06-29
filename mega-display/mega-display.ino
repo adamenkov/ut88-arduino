@@ -120,6 +120,8 @@ void setup()
     Wire.setClock(400000);
 
     sei();
+
+    //Serial.begin(115200);
 }
 
 
@@ -155,17 +157,10 @@ void loop()
         
         if (++keyboard_counter == 0)
         {
-            if (PING & 0x20 == 0)
+            if ((PINH & 0x01) == 0)
             {
                 ut88::Z80::Reset();
                 continue;
-            }
-
-            if (++screen_counter == 0)
-            {
-                Wire.beginTransmission(0x33);
-                Wire.write(ram::screen::bytes, sizeof ram::screen::bytes);
-                Wire.endTransmission();
             }
 
             ut88::Keyboard::Poll();

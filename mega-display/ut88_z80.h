@@ -1,3 +1,4 @@
+#include "Arduino.h"
 //
 //  I borrowed many ideas on driving Z80 by Arduino Mega 2560 from:
 //
@@ -87,9 +88,13 @@ namespace ut88
             // pinMode(Pin::PIN_MREQ_N, INPUT);     // PG0
             // pinMode(Pin::PIN_WR_N, INPUT);       // PG1
             // pinMode(Pin::PIN_IORQ_N, INPUT);     // PG2
-            // Also, I use PG5 to request Z80 reset
-            DDRG &= 0xD8;
-            PORTG |= 0x20;
+            DDRG &= 0xF8;
+
+            // Also, I use D17 (PH0) to request Z80 reset
+            DDRH &= 0xFE;
+            PORTH |= 0x01;
+
+            pinMode(4, INPUT_PULLUP);
 
             Reset();
         }
