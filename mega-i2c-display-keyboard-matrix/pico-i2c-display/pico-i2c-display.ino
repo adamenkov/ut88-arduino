@@ -5,11 +5,11 @@
 DVIGFX1 display(DVI_RES_640x480p60, false, adafruit_feather_dvi_cfg);
 //DVIGFX1 display(DVI_RES_400x240p60, false, adafruit_feather_dvi_cfg, VREG_VOLTAGE_1_30);
 
-uint16_t display_left;
-uint16_t display_top;
+int display_left;
+int display_top;
 
 
-enum : uint16_t
+enum
 {
     TEXT_DISPLAY_WIDTH = 64,
     TEXT_DISPLAY_HEIGHT = 32,
@@ -46,8 +46,6 @@ void setup()
     Wire.setClock(400000);
     Wire.onReceive(onReceive);
     Wire.onRequest(onRequest);
-
-    Serial.begin(115200);
 }
 
 
@@ -58,23 +56,20 @@ void loop()
 }
 
 
-static uint8_t screen[0x0800];
+static uint8_t __attribute__((aligned(4))) screen[0x0800];
 
 
 void onReceive(int cb)
 {
     if (cb == 3)
     {
-        uint16_t b = static_cast<uint16_t>(Wire.read());
+        int b = Wire.read();
         if ((0xE0 <= b) && (b < 0xF0))
         {
-            uint16_t addr = ((b & 0x0007) << 8) | (static_cast<uint16_t>(Wire.read()) & 0x00FF);
-            uint8_t ch = static_cast<uint16_t>(Wire.read()) & 0x00FF;
+            int addr = ((b & 0x7) << 8) | (Wire.read() & 0xFF);
+            int ch = Wire.read() & 0xFF;
 
             screen[addr] = ch;  // for scrolling
-            Serial.print(addr, HEX);
-            Serial.print(": ");
-            Serial.println(ch, HEX);
 
             display.drawBitmap(
                 display_left + CHARACTER_WIDTH * (addr % TEXT_DISPLAY_WIDTH),
@@ -89,46 +84,46 @@ void onReceive(int cb)
     }
     else
     {
-        Serial.println("Scrolling!");
-        // Scrolling!
-        const uint8_t* src = screen + 0x40;                   // LD HL,E840
-        uint8_t* dst = screen;                          // LD DE,E800
-        do
+        int command = Wire.read();
+        if (command == 0)
         {
-            *dst = *src;                                // LD A,(HL)    LD (DE),A
-            ++dst;                                      // INC DE
-            ++src;                                      // INC HL
-        } while (src != screen + 0x0700);               // LD A,H   CP EF   JP NZ,FD1F
-        Serial.println("Done copying.");
-        dst = screen + 0x06C0;                          // LD HL,EEC0
-        do
-        {                                               // LD A,20
-            *dst = 0x20;                                // LD (HL),A
-            ++dst;                                      // INC L
-        } while (dst != screen + 0x0700);               // JP NZ,FD2E
-        Serial.println("Done cleaning.  Now rendering.");
+            // Move lines up
 
-        for (int16_t addr = 0x0700; --addr >= 0;)
-        {
-            uint8_t ch = screen[addr];
-            uint16_t fg = (ch <= 0x7f) ? 0xFFFF : 0x0000;
-            uint16_t bg = ~fg;
+            memcpy(screen, screen + 0x40, 0x06C0);
 
-            display.drawBitmap(
-                display_left + CHARACTER_WIDTH * (addr % TEXT_DISPLAY_WIDTH),
-                display_top + CHARACTER_HEIGHT * (addr / TEXT_DISPLAY_WIDTH),
-                font + 8 * (ch & 0x7F),
-                CHARACTER_WIDTH,
-                CHARACTER_HEIGHT,
-                fg,
-                bg
-            );
+            uint32_t* dst = reinterpret_cast<uint32_t*>(screen + 0x06C0);
+            for (int i = 16; --i >= 0; ++dst)
+            {
+                *dst = 0x20202020;
+            }
+
+            for (int addr = 0x0700; --addr >= 0;)
+            {
+                unsigned int ch = screen[addr];
+                uint16_t fg = (ch <= 0x7f) ? 0xFFFF : 0x0000;
+                uint16_t bg = ~fg;
+
+                display.drawBitmap(
+                    display_left + CHARACTER_WIDTH * (addr % TEXT_DISPLAY_WIDTH),
+                    display_top + CHARACTER_HEIGHT * (addr / TEXT_DISPLAY_WIDTH),
+                    font + 8 * (ch & 0x7F),
+                    CHARACTER_WIDTH,
+                    CHARACTER_HEIGHT,
+                    fg,
+                    bg
+                );
+            }
+            Wire.write(uint8_t(0xFF));
         }
-        Serial.println("Done rendering.");
-        Wire.write(uint8_t(0xFF));
+        else
+        {
+            // Clear screen
+
+            memset(screen, 0x20, sizeof screen);
+            display.fillScreen(0x0000);
+        }
     }
 }
-
 
 void onRequest()
 {
