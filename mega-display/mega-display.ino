@@ -142,7 +142,6 @@ void pause()
 void loop()
 {
     uint16_t keyboard_counter = 0;
-    uint8_t screen_counter = 0;
 
     uint16_t addr = 0x0000;
 
