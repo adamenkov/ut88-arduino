@@ -236,7 +236,57 @@ void loop()
                 }
                 else if (rom::monitor_f::start <= addr)
                 {
-                    DATA_OUT = pgm_read_byte_near(rom::monitor_f::bytes + (addr - rom::monitor_f::start));
+                    if (addr == 0xFD19)
+                    {
+                        // Dude, are you gonna waste my time by scrolling the screen!?
+                        // I'll do the scrolling myself, thank you very much.  Just tell me what to do.
+
+                        Wire.beginTransmission(0x33);
+                        Wire.write(uint8_t(highByte(0xEA)));    // Send anything less than 3 bytes to tell pico to scroll
+                        Wire.endTransmission();
+
+                        //delay(1000);
+
+                        uint8_t* src = ram::screen::bytes + 0x40;       // LD HL,E840
+                        uint8_t* dst = ram::screen::bytes;              // LD DE,E800
+                        do
+                        {
+                            *dst = *src;                                // LD A,(HL)    LD (DE),A
+                            ++dst;                                      // INC DE
+                            ++src;                                      // INC HL
+                        } while (src != ram::screen::bytes + 0x0700);   // LD A,H   CP EF   JP NZ,FD1F
+                        dst = ram::screen::bytes + 0x06C0;              // LD HL,EEC0
+                        do
+                        {                                               // LD A,20
+                            *dst = 0x20;                                // LD (HL),A
+                            ++dst;                                      // INC L
+                        } while (dst != ram::screen::bytes + 0x0700);   // JP NZ,FD2E
+
+                        // Sync with the pico
+                        Wire.requestFrom(0x33, 1);
+                        unsigned long start = micros();
+                        for (;;)
+                        {
+                            if (Wire.available() > 0)
+                            {
+                                while (Wire.available() > 0)
+                                {
+                                    Wire.read();
+                                }
+                                break;
+                            }
+                            if (micros() - start >= 1000000)
+                            {
+                                break;
+                            }
+                        }
+                        
+                        DATA_OUT = 0xC9;                                // RET
+                    }
+                    else
+                    {
+                        DATA_OUT = pgm_read_byte_near(rom::monitor_f::bytes + (addr - rom::monitor_f::start));
+                    }
                 }
                 else
                 {
