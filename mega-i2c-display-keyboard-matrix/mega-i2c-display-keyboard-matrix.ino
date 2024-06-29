@@ -120,22 +120,6 @@ void setup()
     Wire.setClock(400000);
 
     sei();
-
-    //Serial.begin(115200);
-}
-
-
-void pause()
-{
-    // Good old way to spend some time
-    volatile int i = 0;
-    while (++i != 0)
-    {
-        volatile int8_t j = 30;
-        while (--j != 0)
-        {
-        }
-    }
 }
 
 
@@ -156,6 +140,8 @@ void loop()
         
         if (++keyboard_counter == 0)
         {
+            keyboard_counter = 0x8000;
+
             if ((PINH & 0x01) == 0)
             {
                 ut88::Z80::Reset();
@@ -238,14 +224,11 @@ void loop()
                 {
                     if (addr == 0xFD19)
                     {
-                        // Dude, are you gonna waste my time by scrolling the screen!?
-                        // I'll do the scrolling myself, thank you very much.  Just tell me what to do.
+                        // Move lines up Monitor subroutine
 
                         Wire.beginTransmission(0x33);
-                        Wire.write(uint8_t(highByte(0xEA)));    // Send anything less than 3 bytes to tell pico to scroll
+                        Wire.write(uint8_t(0x00));    // 0x00 - do the scrolling
                         Wire.endTransmission();
-
-                        //delay(1000);
 
                         uint8_t* src = ram::screen::bytes + 0x40;       // LD HL,E840
                         uint8_t* dst = ram::screen::bytes;              // LD DE,E800
@@ -262,7 +245,7 @@ void loop()
                             ++dst;                                      // INC L
                         } while (dst != ram::screen::bytes + 0x0700);   // JP NZ,FD2E
 
-                        // Sync with the pico
+                        // Wait for the pico, but not more than 1 second
                         Wire.requestFrom(0x33, 1);
                         unsigned long start = micros();
                         for (;;)
@@ -282,6 +265,22 @@ void loop()
                         }
                         
                         DATA_OUT = 0xC9;                                // RET
+                    }
+                    else if (addr == 0xFCD5)
+                    {
+                        // Clear the screen Monitor subroutine
+
+                        Wire.beginTransmission(0x33);
+                        Wire.write(uint8_t(0x01));    // 0x01 - clear the screen
+                        Wire.endTransmission();
+
+                        uint8_t* dst = ram::screen::bytes;
+                        for (int16_t i = sizeof ram::screen::bytes; --i >= 0; ++dst)
+                        {
+                            *dst = 0x20;
+                        }
+                        
+                        DATA_OUT = 0xC9;    // RET
                     }
                     else
                     {
