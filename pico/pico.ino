@@ -11,11 +11,11 @@ uint16_t display_top;
 
 enum : uint16_t
 {
-    text_display_width = 64,
-    text_display_height = 30,
+    TEXT_DISPLAY_WIDTH = 64,
+    TEXT_DISPLAY_HEIGHT = 32,
 
-    character_width = 6,
-    character_height = 8,
+    CHARACTER_WIDTH = 6,
+    CHARACTER_HEIGHT = 8,
 };
 
 
@@ -39,10 +39,11 @@ void setup()
         }
     }
 
-    display_left = display.width() / 2 - text_display_width * character_width / 2;
-    display_top = display.height() / 2 - text_display_height * character_height / 2;
+    display_left = display.width() / 2 - TEXT_DISPLAY_WIDTH * CHARACTER_WIDTH / 2;
+    display_top = display.height() / 2 - TEXT_DISPLAY_HEIGHT * CHARACTER_HEIGHT / 2;
 
     Wire.begin(0x33);
+    Wire.setClock(400000);
     Wire.onReceive(onReceive);
     Wire.onRequest(onRequest);
 }
