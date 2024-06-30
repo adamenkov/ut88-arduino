@@ -64,14 +64,16 @@ namespace ram
 {
     namespace extra
     {
-        uint8_t bytes[2048];
-        enum { start = 0x3000, end = start + sizeof bytes };
+        uint8_t bytes[2048] =
+        {
+        };
+        enum { start = 0x3000, end = start + 2 * sizeof bytes };
     }
 
     namespace monitor_0
     {
         uint8_t bytes[1024];
-        enum { start = 0xC000, end = start + sizeof bytes };
+        enum { start = 0xC000, end = start + 4 * sizeof bytes };
     }
 
     namespace screen
@@ -206,11 +208,11 @@ void loop()
                 }
                 else if ((addr < ram::extra::end) && (ram::extra::start <= addr))   // Assuming extra RAM starts at 0x3000
                 {
-                    DATA_OUT = ram::extra::bytes[addr - ram::extra::start];
+                    DATA_OUT = ram::extra::bytes[(addr - ram::extra::start) & 0x7FF];
                 }
                 else if ((addr < ram::monitor_0::end) && (ram::monitor_0::start <= addr))   // Assuming Monitor-0's RAM starts at 0xC000
                 {
-                    DATA_OUT = ram::monitor_0::bytes[addr - ram::monitor_0::start];
+                    DATA_OUT = ram::monitor_0::bytes[(addr - ram::monitor_0::start) & 0x3FF];
                 }
                 else if ((addr < ram::screen::end) && (ram::screen::start <= addr))   // Assuming screen RAM starts at 0xE000
                 {
@@ -300,14 +302,14 @@ void loop()
                 {
                     if (ram::extra::start <= addr)
                     {
-                        ram::extra::bytes[addr - ram::extra::start] = DATA_IN;
+                        ram::extra::bytes[(addr - ram::extra::start) & 0x7FF] = DATA_IN;
                     }
                 }
                 else if (addr < ram::monitor_0::end)   // Assuming Monitor-0's RAM starts at 0xC000
                 {
                     if (ram::monitor_0::start <= addr)
                     {
-                        ram::monitor_0::bytes[addr - ram::monitor_0::start] = DATA_IN;
+                        ram::monitor_0::bytes[(addr - ram::monitor_0::start) & 0x3FF] = DATA_IN;
                     }
                 }
                 else if (addr < ram::screen::end)   // Assuming screen RAM starts at 0xE000
