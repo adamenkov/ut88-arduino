@@ -66,13 +66,17 @@ namespace ram
     {
         uint8_t bytes[2048] =
         {
+            // Your codes here
         };
         enum { start = 0x3000, end = start + 2 * sizeof bytes };
     }
 
     namespace monitor_0
     {
-        uint8_t bytes[1024];
+        uint8_t bytes[1024] =
+        {
+            // Your codes here
+        };
         enum { start = 0xC000, end = start + 4 * sizeof bytes };
     }
 
