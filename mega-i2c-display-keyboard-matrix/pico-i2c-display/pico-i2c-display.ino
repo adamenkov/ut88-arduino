@@ -58,7 +58,7 @@ void loop()
 }
 
 
-static uint8_t __attribute__((aligned(4))) screen[0x0800];
+//static uint8_t __attribute__((aligned(4))) screen[0x0800];
 
 
 void onReceive(int cb)
@@ -73,7 +73,7 @@ void onReceive(int cb)
             int addr = ((b & 0x7) << 8) | (Wire.read() & 0xFF);
             int ch = Wire.read() & 0xFF;
 
-            screen[addr] = ch;  // for scrolling
+            //screen[addr] = ch;  // for scrolling
 
             uint16_t fg = (ch <= 0x7f) ? 0xFFFF : 0x0000;
 
@@ -96,7 +96,8 @@ void onReceive(int cb)
             // Move lines up
             //Serial.println("Move lines up.");
 
-            memcpy(screen, screen + 0x40, 0x06C0 /* 27 lines */);
+            /*
+            memcpy(screen, screen + 0x40, 0x06C0);  // 27 lines
 
             uint32_t* dst = reinterpret_cast<uint32_t*>(screen + 0x06C0);
             for (int i = 16; --i >= 0; ++dst)
@@ -104,7 +105,6 @@ void onReceive(int cb)
                 *dst = 0x20202020;
             }
 
-            /*
             for (int addr = 0x0700; --addr >= 0;)
             {
                 unsigned int ch = screen[addr];
@@ -135,7 +135,7 @@ void onReceive(int cb)
             // Clear screen
             //Serial.println("Clear screen.");
 
-            memset(screen, 0x20, sizeof screen);
+            //dmemset(screen, 0x20, sizeof screen);
             display.fillScreen(0x0000);
         }
     }
