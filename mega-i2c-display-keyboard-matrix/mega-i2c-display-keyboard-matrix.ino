@@ -245,6 +245,7 @@ void loop()
                             ++dst;                                      // INC L
                         } while (dst != ram::screen::bytes + 0x0700);   // JP NZ,FD2E
 
+                        /*
                         // Wait for the pico, but not more than 1 second
                         Wire.requestFrom(0x33, 1);
                         unsigned long start = micros();
@@ -263,6 +264,7 @@ void loop()
                                 break;
                             }
                         }
+                        */
                         
                         DATA_OUT = 0xC9;                                // RET
                     }
