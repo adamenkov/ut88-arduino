@@ -3,7 +3,7 @@
 
 
 DVIGFX1 display(DVI_RES_640x480p60, false, adafruit_feather_dvi_cfg);
-//DVIGFX1 display(DVI_RES_400x240p60, false, adafruit_feather_dvi_cfg, VREG_VOLTAGE_1_30);
+//DVIGFX1 display(DVI_RES_400x240p30, false, adafruit_feather_dvi_cfg);
 
 int display_left;
 int display_top;
@@ -124,7 +124,9 @@ void onReceive(int cb)
             */
             uint8_t* ut88_buffer = display.getBuffer() + 640 / 8 * display_top;
             memcpy(ut88_buffer, ut88_buffer + 640 / 8 * CHARACTER_HEIGHT, 640 / 8 * CHARACTER_HEIGHT * 27);
-            display.fillRect(display_left, display_top + CHARACTER_HEIGHT * 27, TEXT_DISPLAY_WIDTH * CHARACTER_WIDTH, CHARACTER_HEIGHT, 0x0000);
+
+            //display.fillRect(display_left, display_top + CHARACTER_HEIGHT * 27, TEXT_DISPLAY_WIDTH * CHARACTER_WIDTH, CHARACTER_HEIGHT, 0x0000);
+            memset(ut88_buffer + 640 / 8 * CHARACTER_HEIGHT * 27, 0x0000, 640 / 8 * CHARACTER_HEIGHT);
 
             //Wire.write(uint8_t(0xFF));
 
@@ -135,7 +137,7 @@ void onReceive(int cb)
             // Clear screen
             //Serial.println("Clear screen.");
 
-            //dmemset(screen, 0x20, sizeof screen);
+            //memset(screen, 0x20, sizeof screen);
             display.fillScreen(0x0000);
         }
     }
