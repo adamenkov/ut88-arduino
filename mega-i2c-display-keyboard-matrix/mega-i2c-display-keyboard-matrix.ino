@@ -230,24 +230,27 @@ void loop()
                 {
                     if (addr == 0xFD19)
                     {
-                        // Move lines up Monitor subroutine
+                        // Scrolling subroutine
 
-                        Wire.beginTransmission(0x33);
-                        Wire.write(uint8_t(0x00));    // 0x00 - do the scrolling
+                        Wire.beginTransmission(0x33);   // 0x33 = I2C address I assigned to the Adafruit DVI
+                        Wire.write(uint8_t(0x00));      // 0x00 - tell the Adafruit DVI to scroll
                         Wire.endTransmission();
 
-                        uint8_t* src = ram::screen::bytes + 0x40;       // LD HL,E840
+                        // Move the screen RAM accordingly
+                        const uint8_t* src = ram::screen::bytes + 0x40; // LD HL,E840
                         uint8_t* dst = ram::screen::bytes;              // LD DE,E800
                         do
                         {
-                            *dst = *src;                                // LD A,(HL)    LD (DE),A
+                            *dst = *src;                                // LD A,(HL) : LD (DE),A
                             ++dst;                                      // INC DE
                             ++src;                                      // INC HL
-                        } while (src != ram::screen::bytes + 0x0700);   // LD A,H   CP EF   JP NZ,FD1F
+                        } while (src != ram::screen::bytes + 0x0700);   // LD A,H : CP EF : JP NZ,FD1F
+                        
+                        // Clear the bottom line
                         dst = ram::screen::bytes + 0x06C0;              // LD HL,EEC0
                         do
-                        {                                               // LD A,20
-                            *dst = 0x20;                                // LD (HL),A
+                        {
+                            *dst = 0x20;                                // LD A,20 : LD (HL),A
                             ++dst;                                      // INC L
                         } while (dst != ram::screen::bytes + 0x0700);   // JP NZ,FD2E
 
