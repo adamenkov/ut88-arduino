@@ -129,6 +129,10 @@ void setup()
 }
 
 
+uint8_t addr0[3] = { 0xC3, 0x00, 0xF8 };
+uint8_t saved_addr0[3] = { 0xC3, 0x00, 0xF8 };
+
+
 void loop()
 {
     uint16_t keyboard_counter = 0;
@@ -148,8 +152,21 @@ void loop()
         {
             keyboard_counter = 0x8000;
 
+            addr0[0] = saved_addr0[0];
+            addr0[1] = saved_addr0[1];
+            addr0[2] = saved_addr0[2];
+
             if ((PINH & 0x01) == 0)
             {
+                saved_addr0[0] = addr0[0];
+                addr0[0] = 0xC3;
+                
+                saved_addr0[1] = addr0[1];
+                addr0[1] = 0x00;
+                
+                saved_addr0[2] = addr0[2];
+                addr0[2] = 0xF8;
+                
                 ut88::Z80::Reset();
                 continue;
             }
@@ -206,7 +223,11 @@ void loop()
                 DATA_DIR = 0xFF;
 
                 // Assuming ROM starts at 0x0000 for optimization
-                if (addr < rom::monitor_0::end)
+                if (addr < rom::monitor_0::start + 3)
+                {
+                    DATA_OUT = addr0[addr];
+                }
+                else if ((addr < rom::monitor_0::end) && (rom::monitor_0::start + 3 <= addr))
                 {
                     DATA_OUT = pgm_read_byte_near(rom::monitor_0::bytes + addr);
                 }
@@ -284,6 +305,10 @@ void loop()
             }
             else if (WR_N == 0)
             {
+                if (addr < rom::monitor_0::start + 3)
+                {
+                    saved_addr0[addr] = addr0[addr] = DATA_IN;
+                }
                 if (addr < ram::extra::end)   // Assuming extra RAM starts at 0x3000
                 {
                     if (ram::extra::start <= addr)
