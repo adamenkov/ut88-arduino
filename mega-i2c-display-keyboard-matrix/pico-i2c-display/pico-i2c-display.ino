@@ -60,18 +60,32 @@ void loop()
 
 //static uint8_t __attribute__((aligned(4))) screen[0x0800];
 
+uint8_t __attribute__((aligned(4))) ram_for_mega[0xF800];
+
+uint16_t saved_addr;
 
 void onReceive(int cb)
 {
     if (cb == 3)
     {
-        //Serial.println("A character");
+        int addr = (Wire.read() & 0xFF);
+        addr <<= 8;
+        addr |= (Wire.read() & 0xFF);
 
-        int b = Wire.read();
-        if ((0xE0 <= b) && (b < 0xF0))
+        if ((addr < 0xE000) || ((0xF000 <= addr) && (addr < 0xF400)))
         {
-            int addr = ((b & 0x7) << 8) | (Wire.read() & 0xFF);
+            ram_for_mega[addr] = Wire.read();
+        }
+        else if (addr < 0xF000)
+        {
+            //Serial.print("Character ");
+
+            addr &= 0x7FF;
             int ch = Wire.read() & 0xFF;
+
+            //Serial.print(uint8_t(ch), HEX);
+            //Serial.print(" at address ");
+            //Serial.println(addr, HEX);
 
             //screen[addr] = ch;  // for scrolling
 
@@ -87,6 +101,14 @@ void onReceive(int cb)
                 ~fg
             );
         }
+    }
+    else if (cb == 2)
+    {
+        int addr = (Wire.read() & 0xFF);
+        addr <<= 8;
+        addr |= (Wire.read() & 0xFF);
+
+        saved_addr = addr;
     }
     else
     {
@@ -145,5 +167,8 @@ void onReceive(int cb)
 
 void onRequest()
 {
+    //Serial.print("Request for byte at address ");
+    //Serial.println(saved_addr, HEX);
 
+    Wire.write((saved_addr < sizeof ram_for_mega) ? ram_for_mega[saved_addr] : 0xFF);
 }

@@ -38,16 +38,6 @@
 
 namespace rom
 {
-    namespace monitor_0
-    {
-        PROGMEM const uint8_t bytes[] =
-        {
-#include "monitor-0.h"
-        };
-
-        enum { start = 0, end = start + sizeof bytes };
-    }
-
     namespace monitor_f
     {
         PROGMEM const uint8_t bytes[] =
@@ -62,22 +52,13 @@ namespace rom
 
 namespace ram
 {
-    namespace extra
+    namespace main
     {
-        uint8_t bytes[2048] =
+        uint8_t bytes[4096] =
         {
-            // Your codes here
+            0xC3, 0x00, 0xF8,
         };
-        enum { start = 0x3000, end = start + 2 * sizeof bytes };
-    }
-
-    namespace monitor_0
-    {
-        uint8_t bytes[1024] =
-        {
-            // Your codes here
-        };
-        enum { start = 0xC000, end = start + 4 * sizeof bytes };
+        enum { start = 0x0000, end = start + sizeof bytes };
     }
 
     namespace screen
@@ -100,12 +81,27 @@ ISR(TIMER1_COMPA_vect)
 }
 
 
+//uint8_t saved_addr0[3] = { 0x00, 0x00, 0x00 };
+
+
 void setup()
 {
-    Serial.begin(9600);
+    //Serial.begin(9600);
+
+    /*
+    saved_addr0[0] = ram::main::bytes[0];
+    ram::main::bytes[0] = 0xC3;
+    
+    saved_addr0[1] = ram::main::bytes[1];
+    ram::main::bytes[1] = 0x00;
+    
+    saved_addr0[2] = ram::main::bytes[2];
+    ram::main::bytes[2] = 0xF8;
+    */
 
     ut88::Z80::Init();
 
+    /*
     cli();
 
     // Timer frequency is 1,024 times lower than the main clock frequency (16 MHz / 1,024).
@@ -122,15 +118,12 @@ void setup()
     // Initialize the counter value to 0
     TCNT1  = 0;
 
+    sei();
+    */
+
     Wire.begin();
     Wire.setClock(400000);
-
-    sei();
 }
-
-
-uint8_t addr0[3] = { 0xC3, 0x00, 0xF8 };
-uint8_t saved_addr0[3] = { 0xC3, 0x00, 0xF8 };
 
 
 void loop()
@@ -152,21 +145,25 @@ void loop()
         {
             keyboard_counter = 0x8000;
 
-            addr0[0] = saved_addr0[0];
-            addr0[1] = saved_addr0[1];
-            addr0[2] = saved_addr0[2];
+            /*
+            ram::main::bytes[0] = saved_addr0[0];
+            ram::main::bytes[1] = saved_addr0[1];
+            ram::main::bytes[2] = saved_addr0[2];
+            */
 
             if ((PINH & 0x01) == 0)
             {
-                saved_addr0[0] = addr0[0];
-                addr0[0] = 0xC3;
+                /*
+                saved_addr0[0] = ram::main::bytes[0];
+                ram::main::bytes[0] = 0xC3;
                 
-                saved_addr0[1] = addr0[1];
-                addr0[1] = 0x00;
+                saved_addr0[1] = ram::main::bytes[1];
+                ram::main::bytes[1] = 0x00;
                 
-                saved_addr0[2] = addr0[2];
-                addr0[2] = 0xF8;
-                
+                saved_addr0[2] = ram::main::bytes[2];
+                ram::main::bytes[2] = 0xF8;
+                */
+
                 ut88::Z80::Reset();
                 continue;
             }
@@ -222,22 +219,39 @@ void loop()
             {
                 DATA_DIR = 0xFF;
 
-                // Assuming ROM starts at 0x0000 for optimization
-                if (addr < rom::monitor_0::start + 3)
+                if (addr < ram::main::end)      // Assuming main RAM starts at 0x0000
                 {
-                    DATA_OUT = addr0[addr];
+                    DATA_OUT = ram::main::bytes[addr];
                 }
-                else if ((addr < rom::monitor_0::end) && (rom::monitor_0::start + 3 <= addr))
+                else if (addr < ram::screen::start)
                 {
-                    DATA_OUT = pgm_read_byte_near(rom::monitor_0::bytes + addr);
-                }
-                else if ((addr < ram::extra::end) && (ram::extra::start <= addr))   // Assuming extra RAM starts at 0x3000
-                {
-                    DATA_OUT = ram::extra::bytes[(addr - ram::extra::start) & 0x7FF];
-                }
-                else if ((addr < ram::monitor_0::end) && (ram::monitor_0::start <= addr))   // Assuming Monitor-0's RAM starts at 0xC000
-                {
-                    DATA_OUT = ram::monitor_0::bytes[(addr - ram::monitor_0::start) & 0x3FF];
+                    Wire.beginTransmission(0x33);
+                    Wire.write(uint8_t(highByte(addr)));
+                    Wire.write(uint8_t(lowByte(addr)));
+                    Wire.endTransmission();
+
+                    // Wait for the pico, but not more than 1 second
+                    Wire.requestFrom(0x33, 1);
+                    uint8_t b = 0xFF;
+
+                    unsigned long start = micros();
+                    for (;;)
+                    {
+                        if (Wire.available() > 0)
+                        {
+                            while (Wire.available() > 0)
+                            {
+                                b = Wire.read();
+                            }
+                            break;
+                        }
+                        if (micros() - start >= 1000000)
+                        {
+                            break;
+                        }
+                    }
+
+                    DATA_OUT = b;
                 }
                 else if ((addr < ram::screen::end) && (ram::screen::start <= addr))   // Assuming screen RAM starts at 0xE000
                 {
@@ -256,6 +270,9 @@ void loop()
                         Wire.beginTransmission(0x33);   // 0x33 = I2C address I assigned to the Adafruit DVI
                         Wire.write(uint8_t(0x00));      // 0x00 - tell the Adafruit DVI to scroll
                         Wire.endTransmission();
+                        
+                        //delayMicroseconds(10);
+                        //delayMicroseconds(1);
 
                         // Move the screen RAM accordingly
                         const uint8_t* src = ram::screen::bytes + 0x40; // LD HL,E840
@@ -285,6 +302,8 @@ void loop()
                         Wire.write(uint8_t(0x01));    // 0x01 - clear the screen
                         Wire.endTransmission();
 
+                        //delayMicroseconds(10);
+
                         uint8_t* dst = ram::screen::bytes;
                         for (int16_t i = sizeof ram::screen::bytes; --i >= 0; ++dst)
                         {
@@ -305,35 +324,30 @@ void loop()
             }
             else if (WR_N == 0)
             {
-                if (addr < rom::monitor_0::start + 3)
+                if (addr < ram::main::end)   // Assuming main RAM starts at 0x0000
                 {
-                    saved_addr0[addr] = addr0[addr] = DATA_IN;
-                }
-                if (addr < ram::extra::end)   // Assuming extra RAM starts at 0x3000
-                {
-                    if (ram::extra::start <= addr)
+                    ram::main::bytes[addr] = DATA_IN;
+
+                    /*
+                    if (addr < 3)
                     {
-                        ram::extra::bytes[(addr - ram::extra::start) & 0x7FF] = DATA_IN;
+                        saved_addr0[addr] = DATA_IN;
                     }
-                }
-                else if (addr < ram::monitor_0::end)   // Assuming Monitor-0's RAM starts at 0xC000
-                {
-                    if (ram::monitor_0::start <= addr)
-                    {
-                        ram::monitor_0::bytes[(addr - ram::monitor_0::start) & 0x3FF] = DATA_IN;
-                    }
+                    */
                 }
                 else if (addr < ram::screen::end)   // Assuming screen RAM starts at 0xE000
                 {
+                    Wire.beginTransmission(0x33);
+                    Wire.write(uint8_t(highByte(addr)));
+                    Wire.write(uint8_t(lowByte(addr)));
+                    Wire.write(uint8_t(DATA_IN));
+                    Wire.endTransmission();
+                    
+                    //delayMicroseconds(10);
+
                     if (ram::screen::start <= addr)
                     {
                         ram::screen::bytes[(addr - ram::screen::start) & 0x7FF] = DATA_IN;
-
-                        Wire.beginTransmission(0x33);
-                        Wire.write(uint8_t(highByte(addr)));
-                        Wire.write(uint8_t(lowByte(addr)));
-                        Wire.write(uint8_t(DATA_IN));
-                        Wire.endTransmission();
                     }
                 }
                 else if (addr < ram::monitor_f::end)   // Assuming Monitor-F's RAM starts at 0xF400
