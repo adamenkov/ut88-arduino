@@ -52,11 +52,12 @@ namespace rom
 
 namespace ram
 {
+    // 4K bytes of onboard RAM, the rest is kept on the Adafruit DVI Feather
     namespace main
     {
         uint8_t bytes[4096] =
         {
-            0xC3, 0x00, 0xF8,
+            0xC3, 0x00, 0xF8,   // JP F800 to start the monitor_f (yes, it's ugly)
         };
         enum { start = 0x0000, end = start + sizeof bytes };
     }
@@ -64,7 +65,7 @@ namespace ram
     namespace screen
     {
         uint8_t bytes[2048];
-        enum { start = 0xE000, end = start + 2 * sizeof bytes };
+        enum { start = 0xE000, end = start + 2 * sizeof bytes };    // E800-EFFF mirrors E000-E7FF
     }
 
     namespace monitor_f
@@ -75,51 +76,9 @@ namespace ram
 }   // namespace ram
 
 
-ISR(TIMER1_COMPA_vect)
-{
-    ut88::Z80::SetInt();
-}
-
-
-//uint8_t saved_addr0[3] = { 0x00, 0x00, 0x00 };
-
-
 void setup()
 {
-    //Serial.begin(9600);
-
-    /*
-    saved_addr0[0] = ram::main::bytes[0];
-    ram::main::bytes[0] = 0xC3;
-    
-    saved_addr0[1] = ram::main::bytes[1];
-    ram::main::bytes[1] = 0x00;
-    
-    saved_addr0[2] = ram::main::bytes[2];
-    ram::main::bytes[2] = 0xF8;
-    */
-
     ut88::Z80::Init();
-
-    /*
-    cli();
-
-    // Timer frequency is 1,024 times lower than the main clock frequency (16 MHz / 1,024).
-    // Also, set the CTC mode (clear timer on compare match).
-    TCCR1A = 0;
-    TCCR1B = (1 << WGM12) | (1 << CS12) | (1 << CS10);
-
-    // 15,625 ticks of the timer at frequency (16 MHz / 1,024) is exactly one second
-    OCR1A = 15625;
-
-    // Enable timer compare interrupt
-    TIMSK1 |= (1 << OCIE1A);
-
-    // Initialize the counter value to 0
-    TCNT1  = 0;
-
-    sei();
-    */
 
     Wire.begin();
     Wire.setClock(400000);
@@ -145,70 +104,15 @@ void loop()
         {
             keyboard_counter = 0x8000;
 
-            /*
-            ram::main::bytes[0] = saved_addr0[0];
-            ram::main::bytes[1] = saved_addr0[1];
-            ram::main::bytes[2] = saved_addr0[2];
-            */
-
             if ((PINH & 0x01) == 0)
             {
-                /*
-                saved_addr0[0] = ram::main::bytes[0];
-                ram::main::bytes[0] = 0xC3;
-                
-                saved_addr0[1] = ram::main::bytes[1];
-                ram::main::bytes[1] = 0x00;
-                
-                saved_addr0[2] = ram::main::bytes[2];
-                ram::main::bytes[2] = 0xF8;
-                */
-
                 ut88::Z80::Reset();
                 continue;
             }
 
             ut88::Keyboard::Poll();
 
-            /*
-            shieldButton = LcdKeypadShield::GetPressedButton();
-
-            switch (shieldButton)
-            {
-            case LcdKeypadShield::Button::Up:
-                shieldButton = LcdKeypadShield::Button::None;
-                lcd.setCursor(0, 1);
-                lcd.print("Uploading...");
-
-                EEPROM.put(0, ram::extra::bytes);
-                EEPROM.put(sizeof ram::extra::bytes, ram::monitor_0::bytes);
-                EEPROM.put(sizeof ram::extra::bytes + sizeof ram::monitor_0::bytes, ram::monitor_f::bytes);
-                
-                pause();
-                lcd.setCursor(0, 1);
-                lcd.print("            ");
-                break;
-
-            case LcdKeypadShield::Button::Down:
-                shieldButton = LcdKeypadShield::Button::None;
-                lcd.setCursor(0, 1);
-                lcd.print("Downloading...");
-                
-                EEPROM.get(0, ram::extra::bytes);
-                EEPROM.get(sizeof ram::extra::bytes, ram::monitor_0::bytes);
-                EEPROM.get(sizeof ram::extra::bytes + sizeof ram::monitor_0::bytes, ram::monitor_f::bytes);
-                
-                pause();
-                lcd.setCursor(0, 1);
-                lcd.print("              ");
-                break;
-
-            case LcdKeypadShield::Button::Right:
-                shieldButton = LcdKeypadShield::Button::None;
-                ut88::Z80::Reset();
-                continue;
-            }
-            */
+            //TODO save & load
         }
 
         addr = ADDR;
@@ -225,12 +129,13 @@ void loop()
                 }
                 else if (addr < ram::screen::start)
                 {
+                    // Get the byte from the Adafruit DVI Feather
                     Wire.beginTransmission(0x33);
                     Wire.write(uint8_t(highByte(addr)));
                     Wire.write(uint8_t(lowByte(addr)));
                     Wire.endTransmission();
 
-                    // Wait for the pico, but not more than 1 second
+                    // Wait for the pico, but not more than 1 ms
                     Wire.requestFrom(0x33, 1);
                     uint8_t b = 0xFF;
 
@@ -245,7 +150,7 @@ void loop()
                             }
                             break;
                         }
-                        if (micros() - start >= 1000000)
+                        if (micros() - start >= 1000)
                         {
                             break;
                         }
@@ -253,9 +158,9 @@ void loop()
 
                     DATA_OUT = b;
                 }
-                else if ((addr < ram::screen::end) && (ram::screen::start <= addr))   // Assuming screen RAM starts at 0xE000
+                else if (addr < ram::screen::end)   // Assuming screen RAM starts at 0xE000
                 {
-                    DATA_OUT = ram::screen::bytes[(addr - ram::screen::start) & 0x7FF];
+                    DATA_OUT = ram::screen::bytes[addr & 0x7FF];
                 }
                 else if ((addr < ram::monitor_f::end) && (ram::monitor_f::start <= addr))  // Assuming Monitor-F's RAM starts at 0xF400
                 {
@@ -268,12 +173,9 @@ void loop()
                         // Scrolling subroutine
 
                         Wire.beginTransmission(0x33);   // 0x33 = I2C address I assigned to the Adafruit DVI
-                        Wire.write(uint8_t(0x00));      // 0x00 - tell the Adafruit DVI to scroll
+                        Wire.write(uint8_t(0x00));      // 0x00 - tell the Adafruit DVI Feather to scroll
                         Wire.endTransmission();
                         
-                        //delayMicroseconds(10);
-                        //delayMicroseconds(1);
-
                         // Move the screen RAM accordingly
                         const uint8_t* src = ram::screen::bytes + 0x40; // LD HL,E840
                         uint8_t* dst = ram::screen::bytes;              // LD DE,E800
@@ -299,10 +201,8 @@ void loop()
                         // Clear the screen Monitor subroutine
 
                         Wire.beginTransmission(0x33);
-                        Wire.write(uint8_t(0x01));    // 0x01 - clear the screen
+                        Wire.write(uint8_t(0x01));    // 0x01 - tell the Adafruit DVI Feather to clear the screen
                         Wire.endTransmission();
-
-                        //delayMicroseconds(10);
 
                         uint8_t* dst = ram::screen::bytes;
                         for (int16_t i = sizeof ram::screen::bytes; --i >= 0; ++dst)
@@ -327,13 +227,6 @@ void loop()
                 if (addr < ram::main::end)   // Assuming main RAM starts at 0x0000
                 {
                     ram::main::bytes[addr] = DATA_IN;
-
-                    /*
-                    if (addr < 3)
-                    {
-                        saved_addr0[addr] = DATA_IN;
-                    }
-                    */
                 }
                 else if (addr < ram::screen::end)   // Assuming screen RAM starts at 0xE000
                 {
@@ -343,11 +236,9 @@ void loop()
                     Wire.write(uint8_t(DATA_IN));
                     Wire.endTransmission();
                     
-                    //delayMicroseconds(10);
-
                     if (ram::screen::start <= addr)
                     {
-                        ram::screen::bytes[(addr - ram::screen::start) & 0x7FF] = DATA_IN;
+                        ram::screen::bytes[addr & 0x7FF] = DATA_IN;
                     }
                 }
                 else if (addr < ram::monitor_f::end)   // Assuming Monitor-F's RAM starts at 0xF400

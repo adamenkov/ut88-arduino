@@ -94,8 +94,6 @@ namespace ut88
             DDRH &= 0xFE;
             PORTH |= 0x01;
 
-            pinMode(4, INPUT_PULLUP);
-
             Reset();
         }
 

@@ -17,7 +17,7 @@ namespace ut88
             {
                 static uint8_t portF[] = { 0xFE, 0xFD, 0xFB, 0xF7, 0xEF, 0xDF, 0xBF, 0x7F };
                 PORTF = portF[row];
-                //delayMicroseconds(1);
+
                 uint8_t k = PINK;
                 if (k == 0xFF)
                 {
