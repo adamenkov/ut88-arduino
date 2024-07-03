@@ -1,9 +1,9 @@
 #include <PicoDVI.h>
 #include <Wire.h>
 
-
-DVIGFX1 display(DVI_RES_640x480p60, false, adafruit_feather_dvi_cfg);
+// I'd rather have this display mode, but I couldn't make it work, even with QSPI /4
 //DVIGFX1 display(DVI_RES_400x240p30, false, adafruit_feather_dvi_cfg);
+DVIGFX1 display(DVI_RES_640x480p60, false, adafruit_feather_dvi_cfg);
 
 int display_left;
 int display_top;
@@ -12,7 +12,7 @@ int display_top;
 enum
 {
     TEXT_DISPLAY_WIDTH = 64,
-    TEXT_DISPLAY_HEIGHT = 32,
+    TEXT_DISPLAY_HEIGHT = 32,   // Change this to 30 if you want to try to use a 400x240 mode
 
     CHARACTER_WIDTH = 6,
     CHARACTER_HEIGHT = 8,
@@ -46,8 +46,6 @@ void setup()
     Wire.setClock(400000);
     Wire.onReceive(onReceive);
     Wire.onRequest(onRequest);
-
-    //Serial.begin(115200);
 }
 
 
@@ -58,11 +56,9 @@ void loop()
 }
 
 
-//static uint8_t __attribute__((aligned(4))) screen[0x0800];
-
 uint8_t __attribute__((aligned(4))) ram_for_mega[0xF800];
 
-uint16_t saved_addr;
+uint16_t requested_addr;    // requested by Arduino
 
 void onReceive(int cb)
 {
@@ -72,22 +68,14 @@ void onReceive(int cb)
         addr <<= 8;
         addr |= (Wire.read() & 0xFF);
 
-        if ((addr < 0xE000) || ((0xF000 <= addr) && (addr < 0xF400)))
+        if (addr < 0xE000)
         {
             ram_for_mega[addr] = Wire.read();
         }
         else if (addr < 0xF000)
         {
-            //Serial.print("Character ");
-
             addr &= 0x7FF;
             int ch = Wire.read() & 0xFF;
-
-            //Serial.print(uint8_t(ch), HEX);
-            //Serial.print(" at address ");
-            //Serial.println(addr, HEX);
-
-            //screen[addr] = ch;  // for scrolling
 
             uint16_t fg = (ch <= 0x7f) ? 0xFFFF : 0x0000;
 
@@ -108,58 +96,25 @@ void onReceive(int cb)
         addr <<= 8;
         addr |= (Wire.read() & 0xFF);
 
-        saved_addr = addr;
+        requested_addr = addr;
     }
     else
     {
+        // cb == 1
+
         int command = Wire.read();
         if (command == 0)
         {
             // Move lines up
-            //Serial.println("Move lines up.");
-
-            /*
-            memcpy(screen, screen + 0x40, 0x06C0);  // 27 lines
-
-            uint32_t* dst = reinterpret_cast<uint32_t*>(screen + 0x06C0);
-            for (int i = 16; --i >= 0; ++dst)
-            {
-                *dst = 0x20202020;
-            }
-
-            for (int addr = 0x0700; --addr >= 0;)
-            {
-                unsigned int ch = screen[addr];
-                uint16_t fg = (ch <= 0x7f) ? 0xFFFF : 0x0000;
-                uint16_t bg = ~fg;
-
-                display.drawBitmap(
-                    display_left + CHARACTER_WIDTH * (addr % TEXT_DISPLAY_WIDTH),
-                    display_top + CHARACTER_HEIGHT * (addr / TEXT_DISPLAY_WIDTH),
-                    font + 8 * (ch & 0x7F),
-                    CHARACTER_WIDTH,
-                    CHARACTER_HEIGHT,
-                    fg,
-                    bg
-                );
-            }
-            */
             uint8_t* ut88_buffer = display.getBuffer() + 640 / 8 * display_top;
-            memcpy(ut88_buffer, ut88_buffer + 640 / 8 * CHARACTER_HEIGHT, 640 / 8 * CHARACTER_HEIGHT * 27);
+            memcpy(ut88_buffer, ut88_buffer + 640 / 8 * CHARACTER_HEIGHT, 640 / 8 * CHARACTER_HEIGHT * 27);     // 27 lines - that's how it is in the UT-88's Monitor
 
-            //display.fillRect(display_left, display_top + CHARACTER_HEIGHT * 27, TEXT_DISPLAY_WIDTH * CHARACTER_WIDTH, CHARACTER_HEIGHT, 0x0000);
+            // Clear the 28th line (line 27)
             memset(ut88_buffer + 640 / 8 * CHARACTER_HEIGHT * 27, 0x0000, 640 / 8 * CHARACTER_HEIGHT);
-
-            //Wire.write(uint8_t(0xFF));
-
-            //Serial.println("Done moving lines up.");
         }
         else
         {
             // Clear screen
-            //Serial.println("Clear screen.");
-
-            //memset(screen, 0x20, sizeof screen);
             display.fillScreen(0x0000);
         }
     }
@@ -167,8 +122,5 @@ void onReceive(int cb)
 
 void onRequest()
 {
-    //Serial.print("Request for byte at address ");
-    //Serial.println(saved_addr, HEX);
-
-    Wire.write((saved_addr < sizeof ram_for_mega) ? ram_for_mega[saved_addr] : 0xFF);
+    Wire.write((requested_addr < sizeof ram_for_mega) ? ram_for_mega[requested_addr] : 0xFF);
 }
