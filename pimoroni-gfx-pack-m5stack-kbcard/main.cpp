@@ -31,6 +31,13 @@ int main()
 
     word kb_counter = 0;
 
+    ut88.mmio_display.bytes[0] = 0xFF;
+    ut88.mmio_display.bytes[1] = 0xFF;
+    ut88.mmio_display.bytes[2] = 0xFF;
+
+    ut88.redraw = true;
+
+
     for (;;)
     {
         if (++kb_counter == 0)

@@ -53,6 +53,32 @@ const char* mnemonic[] {
 static_assert(sizeof(mnemonic) / sizeof(mnemonic[0]) == 256, "Opcode array size mismatch");
 
 
+
+int states[] {
+    4, 10,  7,  5,   5,  5,  7,  4,     4, 10,  7,  5,   5,  5,  7,  4,
+    4, 10,  7,  5,   5,  5,  7,  4,     4, 10,  7,  5,   5,  5,  7,  4,
+    4, 10, 16,  5,   5,  5,  7,  4,     4, 10, 16,  5,   5,  5,  7,  4,
+    4, 10, 13,  5,  10, 10, 10,  4,     4, 10, 13,  5,   5,  5,  7,  4,
+
+    5,  5,  5,  5,   5,  5,  7,  5,     5,  5,  5,  5,   5,  5,  7,  5,
+    5,  5,  5,  5,   5,  5,  7,  5,     5,  5,  5,  5,   5,  5,  7,  5,
+    5,  5,  5,  5,   5,  5,  7,  5,     5,  5,  5,  5,   5,  5,  7,  5,
+    7,  7,  7,  7,   7,  7,  7,  7,     5,  5,  5,  5,   5,  5,  5,  5,
+
+    4,  4,  4,  4,   4,  4,  7,  4,     4,  4,  4,  4,   4,  4,  7,  4,
+    4,  4,  4,  4,   4,  4,  7,  4,     4,  4,  4,  4,   4,  4,  7,  4,
+    4,  4,  4,  4,   4,  4,  7,  4,     4,  4,  4,  4,   4,  4,  7,  4,
+    4,  4,  4,  4,   4,  4,  7,  4,     4,  4,  4,  4,   4,  4,  7,  4,
+
+    5, 10, 10, 10,  11, 11,  7, 11,     5, 10, 10,  4,  11, 17,  7, 11,
+    5, 10, 10, 10,  11, 11,  7, 11,     5,  4, 10, 10,  11,  4,  7, 11,
+    5, 10, 10, 18,  11, 11,  7, 11,     5,  5, 10,  4,  11,  4,  7, 11,
+    5, 10, 10,  4,  11, 11,  7, 11,     5,  5, 10,  4,  11,  4,  7, 11,
+};
+
+static_assert(sizeof(states) / sizeof(states[0]) == 256, "States size array size mismatch");
+
+
 int opcode_arg_size[] {
     0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0,
     0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0,
@@ -147,6 +173,9 @@ public:
 
     bool ei;
 
+    absolute_time_t time_to_wake;
+    int num_states = 0;
+
     struct rom
     {
         const byte bytes[1024]
@@ -218,7 +247,6 @@ public:
         word prev_pc = pc;
         pc += opcode_arg_size[opcode] + 1;
 
-
         switch (opcode)
         {
             case 0x00: break; // NOP
@@ -240,6 +268,7 @@ public:
                 }
                 break;
             case 0x06: b = arg1; break; // MVI B, byte
+            case 0x07: a = (a << 1) | (a >> 7); cy = a >> 7; break; // RLC
             case 0x08: break; // NOP_08
             case 0x0A: a = read_mem(bc); break; // LDAX B
             case 0x0B: --bc; b = bc >> 8; c = bc & 0xFF; break; // DCX B
@@ -458,11 +487,11 @@ public:
             case 0xB6: a |= read_mem(hl); set_szp(a); ac = false; cy = false; break; // ORA M
             case 0xB7: set_szp(a); ac = false; cy = false; break; // ORA A
 
-            case 0xC0: if (!z) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; } break; // RNZ addr
+            case 0xC0: if (!z) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; num_states += 6; } break; // RNZ addr
             case 0xC1: c = read_mem(sp++); b = read_mem(sp++); break; // POP B
             case 0xC2: if (!z) pc = addr; break; // JNZ addr
             case 0xC3: pc = addr; break; // JMP addr
-            case 0xC4: if (!z) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; } break; // CNZ addr
+            case 0xC4: if (!z) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; num_states += 6; } break; // CNZ addr
             case 0xC5: write_mem(--sp, b); write_mem(--sp, c); break; // PUSH B
             case 0xC6: // ADI byte
                 {
@@ -474,11 +503,11 @@ public:
                 }
                 break;
             case 0xC7: write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = 0x00; break; // RST 0
-            case 0xC8: if (z) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; } break; // RZ addr
+            case 0xC8: if (z) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; num_states += 6; } break; // RZ addr
             case 0xC9: pc = read_mem(sp++); pc |= read_mem(sp++) << 8; break; // RET
             case 0xCA: if (z) pc = addr; break; // JZ addr
             case 0xCB: break; // NOP_CB
-            case 0xCC: if (z) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; } break; // CZ addr
+            case 0xCC: if (z) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; num_states += 6; } break; // CZ addr
             case 0xCD: write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; break; // CALL addr
             case 0xCE: // ACI byte
                 {
@@ -490,11 +519,11 @@ public:
                 }
                 break;
             case 0xCF: write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = 0x08; break; // RST 1
-            case 0xD0: if (!c) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; } break; // RNC
+            case 0xD0: if (!c) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; num_states += 6; } break; // RNC
             case 0xD1: e = read_mem(sp++); d = read_mem(sp++); break; // POP D
             case 0xD2: if (!c) pc = addr; break; // JNC addr
             case 0xD3: write_io(arg1, a); break; // OUT port
-            case 0xD4: if (!c) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; } break; // CNC addr
+            case 0xD4: if (!c) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; num_states += 6; } break; // CNC addr
             case 0xD5: write_mem(--sp, d); write_mem(--sp, e); break; // PUSH B
             case 0xD6: // SUI byte
                 {
@@ -505,11 +534,11 @@ public:
                 }
                 break;
             case 0xD7: write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = 0x10; break; // RST 2
-            case 0xD8: if (c) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; } break; // RC
+            case 0xD8: if (c) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; num_states += 6; } break; // RC
             case 0xD9: break; // NOP_D9
             case 0xDA: if (c) pc = addr; break; // JC addr
             case 0xDB: a = read_io(arg1); break; // IN port
-            case 0xDC: if (c) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; } break; // CC addr
+            case 0xDC: if (c) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; num_states += 6; } break; // CC addr
             case 0xDD: break; // NOP_DD
             case 0xDE: // SBI byte
                 {
@@ -520,7 +549,7 @@ public:
                 }
                 break;
             case 0xDF: write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = 0x18; break; // RST 3
-            case 0xE0: if (!p) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; } break; // RPO
+            case 0xE0: if (!p) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; num_states += 6; } break; // RPO
             case 0xE1: l = read_mem(sp++); h = read_mem(sp++); break; // POP H
             case 0xE2: if (!p) pc = addr; break; // JPO addr
             case 0xE3: // XTHL
@@ -534,31 +563,31 @@ public:
                     h = temp;
                 }
                 break;
-            case 0xE4: if (!p) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; } break; // CPO addr
+            case 0xE4: if (!p) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; num_states += 6; } break; // CPO addr
             case 0xE5: write_mem(--sp, h); write_mem(--sp, l); break; // PUSH B
             case 0xE6: a &= arg1; set_szp(a); ac = false; cy = false; break; // ANI byte
             case 0xE7: write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = 0x20; break; // RST 4
-            case 0xE8: if (p) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; } break; // RPE
+            case 0xE8: if (p) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; num_states += 6; } break; // RPE
             case 0xE9: pc = hl; break; // PCHL
             case 0xEA: if (p) pc = addr; break; // JPE addr
             case 0xEB: std::swap(h, d); std::swap(l, e); break; // XCHG
-            case 0xEC: if (p) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; } break; // CPE addr
+            case 0xEC: if (p) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; num_states += 6; } break; // CPE addr
             case 0xED: break; // NOP_ED
             case 0xEE: a ^= arg1; set_szp(a); ac = false; cy = false; break; // XRI byte
             case 0xEF: write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = 0x28; break; // RST 5
-            case 0xF0: if (!s) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; } break; // RP
+            case 0xF0: if (!s) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; num_states += 6; } break; // RP
             case 0xF1: a = read_mem(sp++); psw(read_mem(sp++)); break; // POP PSW
             case 0xF2: if (!s) pc = addr; break; // JP addr
             case 0xF3: ei = false; break; // DI
-            case 0xF4: if (!s) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; } break; // CP addr
+            case 0xF4: if (!s) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; num_states += 6; } break; // CP addr
             case 0xF5: write_mem(--sp, psw()); write_mem(--sp, a); break; // PUSH PSW
             case 0xF6: a |= arg1; set_szp(a); ac = false; cy = false; break; // ORI byte
             case 0xF7: write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = 0x30; break; // RST 6
-            case 0xF8: if (s) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; } break; // RM
+            case 0xF8: if (s) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; num_states += 6; } break; // RM
             case 0xF9: sp = hl; break; // SPHL
             case 0xFA: if (s) pc = addr; break; // JM addr
             case 0xFB: ei = true; break; // EI
-            case 0xFC: if (s) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; } break; // CM addr
+            case 0xFC: if (s) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; num_states += 6; } break; // CM addr
             case 0xFD: break; // NOP_FD
             case 0xFE: // CPI byte
                 {
@@ -577,6 +606,15 @@ public:
                 return false;
         }
 
+        num_states += states[opcode];
+
+        // Throttle to 2 MHz (2,000 states per ms)
+        absolute_time_t target_time = delayed_by_ms(time_to_wake, num_states / 2'000);
+        if (absolute_time_diff_us(get_absolute_time(), target_time) > 0)
+        {
+            sleep_until(target_time);
+        }
+
         return true;
     }
 
@@ -584,12 +622,9 @@ public:
     {
         pc = 0;
         ei = false;
-
-        mmio_display.bytes[0] = 0xFF;
-        mmio_display.bytes[1] = 0xFF;
-        mmio_display.bytes[2] = 0xFF;
-
-        redraw = true;
+        
+        time_to_wake = get_absolute_time();
+        num_states = 0;
     }
 
     byte read_mem(word addr)
