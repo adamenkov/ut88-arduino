@@ -30,7 +30,7 @@ const char* hex_byte[]
 
 const char* mnemonic[] {
     "NOP",    "LXI  B,",  "STAX B",  "INX  B",  "INR  B", "DCR  B", "MVI  B,", "RLC", "NOP_08", "DAD  B",  "LDAX B", "DCX  B",  "INR  C", "DCR  C", "MVI  C,", "RRC",
-    "NOP_10", "LXI  D,", " STAX D",  "INX  D",  "INR  D", "DCR  D", "MVI  D,", "RAL", "NOP_18", "DAD  D",  "LDAX B", "DCX  D",  "INR  E", "DCR  E", "MVI  E,", "RAR",
+    "NOP_10", "LXI  D,", " STAX D",  "INX  D",  "INR  D", "DCR  D", "MVI  D,", "RAL", "NOP_18", "DAD  D",  "LDAX D", "DCX  D",  "INR  E", "DCR  E", "MVI  E,", "RAR",
     "NOP_20", "LXI  H,",  "SHLD ",   "INX  H",  "INR  H", "DCR  H", "MVI  H,", "DAA", "NOP_28", "DAD  H",  "LHLD ",  "DCX  H",  "INR  L", "DCR  L", "MVI  L,", "CMA",
     "NOP_30", "LXI  SP,", "STA  ",   "INX  SP", "INR  M", "DCR  M", "MVI  M,", "STC", "NOP_38", "DAD  SP", "LDA  ",  "DCX  SP", "INR  A", "DCR  A", "MVI  A,", "CMC",
 
@@ -173,8 +173,9 @@ public:
 
     bool ei;
 
-    absolute_time_t time_to_wake;
+    absolute_time_t time_of_reset;
     int num_states = 0;
+    int states_since_last_second;
 
     struct rom
     {
@@ -203,12 +204,12 @@ public:
 
     byte opcode;
 
-    byte kb_byte = 0;
-    bool reset_requested = true;
+    byte kb_byte;
+    bool reset_requested;
 
     byte psw()
     {
-        return (s << 7) | (z << 6) | (ac << 4) | (p << 2) | cy;
+        return (s << 7) | (z << 6) | (ac << 4) | (p << 2) | 0x02 | cy;
     }
 
     void psw(byte psw)
@@ -268,7 +269,7 @@ public:
                 }
                 break;
             case 0x06: b = arg1; break; // MVI B, byte
-            case 0x07: a = (a << 1) | (a >> 7); cy = a >> 7; break; // RLC
+            case 0x07: cy = a >> 7; a = (a << 1) | (a >> 7); break; // RLC
             case 0x08: break; // NOP_08
             case 0x0A: a = read_mem(bc); break; // LDAX B
             case 0x0B: --bc; b = bc >> 8; c = bc & 0xFF; break; // DCX B
@@ -343,6 +344,22 @@ public:
                 }
                 break;
             case 0x26: h = arg1; break; // MVI H, byte
+            // 0x27 DAA  (fully corrected)
+            case 0x27: {
+                byte adj = 0;
+                bool carry = cy;
+                bool half  = ac;
+
+                if ((a & 0x0F) > 9 || half)       adj += 0x06;
+                if (a > 0x99 || carry) { adj |= 0x60; carry = true; }
+
+                word r = word(a) + adj;
+                ac = ((a & 0x0F) + (adj & 0x0F)) > 0x0F;
+                a = byte(r);
+                cy = carry || (r & 0x100);
+
+                set_szp(a);
+            } break;
             case 0x28: break; // NOP_28
             case 0x2A: l = read_mem(addr); h = read_mem(addr + 1); break; // LHLD addr
             case 0x2B: --hl; h = hl >> 8; l = hl & 0xFF; break; // DCX H
@@ -487,6 +504,15 @@ public:
             case 0xB6: a |= read_mem(hl); set_szp(a); ac = false; cy = false; break; // ORA M
             case 0xB7: set_szp(a); ac = false; cy = false; break; // ORA A
 
+            // 0xBE CMP M  (was mislabeled/implemented as CPI)
+            case 0xBE: {
+                byte m = read_mem(hl);
+                ac = (a & 0x0F) < (m & 0x0F);
+                byte res = a - m;
+                set_szp(res);
+                cy = a < m;
+            } break;
+
             case 0xC0: if (!z) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; num_states += 6; } break; // RNZ addr
             case 0xC1: c = read_mem(sp++); b = read_mem(sp++); break; // POP B
             case 0xC2: if (!z) pc = addr; break; // JNZ addr
@@ -509,15 +535,15 @@ public:
             case 0xCB: break; // NOP_CB
             case 0xCC: if (z) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; num_states += 6; } break; // CZ addr
             case 0xCD: write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; break; // CALL addr
-            case 0xCE: // ACI byte
-                {
-                    ac = (a & 0x0F) + (arg1 & 0x0F) >= 0x10;
-                    word x = word(a) + word(arg1) + cy;
-                    a = byte(x);
-                    set_szp(a);
-                    cy = (x & 0x100) != 0;
-                }
-                break;
+            // 0xCE ACI  (fix AC)
+            case 0xCE: {
+                word cin = cy ? 1 : 0;
+                ac = ((a & 0x0F) + (arg1 & 0x0F) + cin) > 0x0F;
+                word x = word(a) + word(arg1) + cin;
+                a = byte(x);
+                set_szp(a);
+                cy = (x & 0x100) != 0;
+            } break;
             case 0xCF: write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = 0x08; break; // RST 1
             case 0xD0: if (!c) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; num_states += 6; } break; // RNC
             case 0xD1: e = read_mem(sp++); d = read_mem(sp++); break; // POP D
@@ -565,7 +591,7 @@ public:
                 break;
             case 0xE4: if (!p) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; num_states += 6; } break; // CPO addr
             case 0xE5: write_mem(--sp, h); write_mem(--sp, l); break; // PUSH B
-            case 0xE6: a &= arg1; set_szp(a); ac = false; cy = false; break; // ANI byte
+            case 0xE6: a &= arg1; set_szp(a); ac = true; cy = false; break; // ANI byte
             case 0xE7: write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = 0x20; break; // RST 4
             case 0xE8: if (p) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; num_states += 6; } break; // RPE
             case 0xE9: pc = hl; break; // PCHL
@@ -576,11 +602,11 @@ public:
             case 0xEE: a ^= arg1; set_szp(a); ac = false; cy = false; break; // XRI byte
             case 0xEF: write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = 0x28; break; // RST 5
             case 0xF0: if (!s) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; num_states += 6; } break; // RP
-            case 0xF1: a = read_mem(sp++); psw(read_mem(sp++)); break; // POP PSW
+            case 0xF1: psw(read_mem(sp++)); a = read_mem(sp++); break; // POP PSW
             case 0xF2: if (!s) pc = addr; break; // JP addr
             case 0xF3: ei = false; break; // DI
             case 0xF4: if (!s) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; num_states += 6; } break; // CP addr
-            case 0xF5: write_mem(--sp, psw()); write_mem(--sp, a); break; // PUSH PSW
+            case 0xF5: write_mem(--sp, a); write_mem(--sp, psw()); break; // PUSH PSW
             case 0xF6: a |= arg1; set_szp(a); ac = false; cy = false; break; // ORI byte
             case 0xF7: write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = 0x30; break; // RST 6
             case 0xF8: if (s) { pc = read_mem(sp++); pc |= read_mem(sp++) << 8; num_states += 6; } break; // RM
@@ -589,15 +615,15 @@ public:
             case 0xFB: ei = true; break; // EI
             case 0xFC: if (s) { write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = addr; num_states += 6; } break; // CM addr
             case 0xFD: break; // NOP_FD
-            case 0xFE: // CPI byte
-                {
-                    s = a < arg1;
-                    z = a == arg1;
-                    ac = (a & 0x0F) < (arg1 & 0x0F);
-                    p = parity[a - arg1];
-                    cy = a < arg1;
-                }
-                break;
+            // 0xFE CPI
+            case 0xFE: {
+                byte res = a - arg1;
+                s  = (res & 0x80) != 0;
+                z  = (res == 0);
+                ac = (a & 0x0F) < (arg1 & 0x0F);
+                p  = parity[res];
+                cy = a < arg1;
+            } break;
             case 0xFF: write_mem(--sp, pc >> 8); write_mem(--sp, pc & 0xFF); pc = 0x38; break; // RST 7
 
 
@@ -607,12 +633,33 @@ public:
         }
 
         num_states += states[opcode];
+        states_since_last_second += states[opcode];
 
         // Throttle to 2 MHz (2,000 states per ms)
-        absolute_time_t target_time = delayed_by_ms(time_to_wake, num_states / 2'000);
+        absolute_time_t target_time = delayed_by_ms(time_of_reset, num_states / 2'000);
         if (absolute_time_diff_us(get_absolute_time(), target_time) > 0)
         {
             sleep_until(target_time);
+        }
+
+        // Check if one simulated second has elapsed
+        if (states_since_last_second >= 2'000'000)
+        {
+            if (ei)
+            {
+                ei = false;
+
+                // 0xFF is the only interrupt vector supported
+                write_mem(--sp, pc >> 8);
+                write_mem(--sp, pc & 0xFF);
+                pc = 0x38;
+
+                states_since_last_second += 11;
+                num_states += 11;
+            }
+
+            // Reset the counter
+            states_since_last_second -= 2'000'000;
         }
 
         return true;
@@ -620,11 +667,15 @@ public:
 
     void reset()
     {
+        reset_requested = false;
+        kb_byte = 0;
+
         pc = 0;
         ei = false;
         
-        time_to_wake = get_absolute_time();
+        time_of_reset = get_absolute_time();
         num_states = 0;
+        states_since_last_second = 0;
     }
 
     byte read_mem(word addr)
@@ -661,13 +712,6 @@ public:
         {
             case 0xA0:
             {
-                if (kb_byte == 0x1B)
-                {
-                    reset_requested = true;
-                    kb_byte = 0x00;
-                    return 0x00;
-                }
-
                 byte result = key_code[kb_byte];
                 kb_byte = 0x00;
                 return result;

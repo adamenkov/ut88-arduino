@@ -63,3 +63,5 @@ target_include_directories(pimoroni-gfx-pack-m5stack-kbcard PRIVATE
 
 pico_add_extra_outputs(pimoroni-gfx-pack-m5stack-kbcard)
 
+set(CMAKE_BUILD_TYPE Debug)
+

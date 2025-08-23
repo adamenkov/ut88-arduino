@@ -37,6 +37,7 @@ int main()
 
     ut88.redraw = true;
 
+    ut88.reset();
 
     for (;;)
     {
@@ -47,6 +48,12 @@ int main()
                 byte b = 0;
                 int result = i2c.read_blocking(CARDKB_ADDR, &b, size_t(1), false);
                 ut88.kb_byte = result == 1 ? b : 0;
+
+                if (ut88.kb_byte == 0x1B)
+                {
+                    ut88.reset_requested = true;
+                    ut88.kb_byte = 0x00;
+                }
             }
         }
 
