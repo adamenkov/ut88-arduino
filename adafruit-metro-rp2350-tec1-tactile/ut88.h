@@ -3,8 +3,27 @@
 #include <string>
 
 
-using byte = std::uint8_t;
-using word = std::uint16_t;
+using byte = uint8_t;
+using word = uint16_t;
+
+
+namespace Keyboard
+{
+    byte GetPortA()
+    {
+        return 0xFF;
+    }
+    
+    byte GetPortB()
+    {
+        return 0x7F;
+    }
+    
+    byte GetPortC()
+    {
+        return 0x07;
+    }
+}
 
 
 const char* hex_byte[]
@@ -173,39 +192,38 @@ public:
 
     bool ei;
 
+    uint8_t portA;
+
     absolute_time_t time_of_reset;
-    int num_states = 0;
+    int num_states;
     int states_since_last_second;
 
-    struct rom
-    {
-        const byte bytes[1024]
-        {
-#include "ut88_rom.h"
-        };
-
-        enum { start = 0, end = start + sizeof bytes };
-    } rom;
-
-    
-    struct mmio_display
-    {
-        uint8_t bytes[3];
-        enum { start = 0x9000, end = start + sizeof bytes };
-    } mmio_display;
-
-    bool redraw;
 
     struct ram
     {
-        uint8_t bytes[1024];
-        enum { start = 0xC000, end = start + sizeof bytes };
+        byte bytes[0xF800] {};
+
+        enum { start = 0, end = start + sizeof bytes };
     } ram;
 
-    byte opcode;
+    struct rom
+    {
+        const byte bytes[2'048]
+        {
+#include "monitor-f.h"
+        };
 
+        enum { start = 0xF800, end = start + sizeof bytes };
+    } rom;
+
+    byte opcode;    
+    
     byte kb_byte;
     bool reset_requested;
+
+    DVHSTX8& display;
+
+    UT88(DVHSTX8& display) : display(display) {}
 
     byte psw()
     {
@@ -226,6 +244,12 @@ public:
         s = (bb & 0x80) != 0;
         z = bb == 0;
         p = parity[bb];
+    }
+
+    void dad(word hl, word rp) {
+        uint32_t r = uint32_t(hl) + rp;
+        hl = word(r); h = hl >> 8; l = hl & 0xFF;
+        cy = (r >> 16) & 1;
     }
 
     void do_ana(uint8_t rhs) {
@@ -278,6 +302,7 @@ public:
             case 0x06: b = arg1; break; // MVI B, byte
             case 0x07: cy = a >> 7; a = (a << 1) | (a >> 7); break; // RLC
             case 0x08: break; // NOP_08
+            case 0x09: dad(hl, bc); break;   // DAD B
             case 0x0A: a = read_mem(bc); break; // LDAX B
             case 0x0B: --bc; b = bc >> 8; c = bc & 0xFF; break; // DCX B
             case 0x0C: // INR C
@@ -315,6 +340,7 @@ public:
                 break;
             case 0x16: d = arg1; break; // MVI D, byte
             case 0x18: break; // NOP_18
+            case 0x19: dad(hl, de); break;   // DAD D
             case 0x1A: a = read_mem(de); break; // LDAX D
             case 0x1B: --de; d = de >> 8; e = de & 0xFF; break; // DCX D
             case 0x1C: // INR E
@@ -368,6 +394,7 @@ public:
                 set_szp(a);
             } break;
             case 0x28: break; // NOP_28
+            case 0x29: dad(hl, hl); break;   // DAD H
             case 0x2A: l = read_mem(addr); h = read_mem(addr + 1); break; // LHLD addr
             case 0x2B: --hl; h = hl >> 8; l = hl & 0xFF; break; // DCX H
             case 0x2C: // INR L
@@ -411,6 +438,7 @@ public:
             case 0x36: write_mem(hl, arg1); break; // MVI M, byte
             case 0x37: cy = true; break; // STC
             case 0x38: break; // NOP_38
+            case 0x39: dad(hl, sp); break;   // DAD SP
             case 0x3A: a = read_mem(addr); break; // LDA addr
             case 0x3B: --sp; break; // DCX SP
             case 0x3C: // INR A
@@ -493,7 +521,7 @@ public:
             case 0x7D: a = l; break; // MOV A, L
             case 0x7E: a = read_mem(hl); break; // MOV A, M
             case 0x7F: break; // MOV A, A
-
+            
             case 0xA0: do_ana(b);               break; // ANA B
             case 0xA1: do_ana(c);               break; // ANA C
             case 0xA2: do_ana(d);               break; // ANA D
@@ -747,9 +775,11 @@ public:
         reset_requested = false;
         kb_byte = 0;
 
-        pc = 0;
+        pc = 0xF800;
         ei = false;
         
+        portA = 0xFF;
+
         time_of_reset = get_absolute_time();
         num_states = 0;
         states_since_last_second = 0;
@@ -757,49 +787,80 @@ public:
 
     byte read_mem(word addr)
     {
-        if (addr < rom::end)
+        if (addr < 0xE800)
         {
-            return rom.bytes[addr];
+            return ram.bytes[addr];
         }
 
-        if (ram.start <= addr && addr < ram.end)
+        if (addr < 0xF000)
         {
-            return ram.bytes[addr - ram.start];
+            return ram.bytes[addr - 0x0800];
         }
 
-        return 0xFF;
+        if (addr < 0xF800)
+        {
+            return ram.bytes[addr];
+        }
+
+        return rom.bytes[addr - 0xF800];
     }
 
     void write_mem(word addr, byte value)
     {
-        if (mmio_display.start <= addr && addr < mmio_display.end)
+        if (addr < 0xE000)
         {
-            mmio_display.bytes[addr - mmio_display.start] = value;
-            redraw = true;
+            ram.bytes[addr] = value;
+            return;
         }
-        else if (ram.start <= addr && addr < ram.end)
+
+        if ((0xF000 <= addr) && (addr < 0xF800))
         {
-            ram.bytes[addr - ram.start] = value;
+            ram.bytes[addr] = value;
+            return;
         }
+
+        if (addr >= 0xF800)
+        {
+            return;
+        }
+
+        addr &= 0xF7FF;
+        ram.bytes[addr] = value;
+
+        addr &= 0x07FF;
+        display.drawBitmap(
+            display_left + CHARACTER_WIDTH * (addr % TEXT_DISPLAY_WIDTH),
+            display_top + CHARACTER_HEIGHT * (addr / TEXT_DISPLAY_WIDTH),
+            font + 8 * (value & 0x7F),
+            CHARACTER_WIDTH,
+            CHARACTER_HEIGHT,
+            (value <= 0x7f) ? 0xDF : 0x00,
+            (value <= 0x7f) ? 0x00 : 0xDF
+        );
+
     }
 
     byte read_io(byte port)
     {
         switch (port)
         {
-            case 0xA0:
-            {
-                byte result = key_code[kb_byte];
-                kb_byte = 0x00;
-                return result;
-            }
+            case 0x05:  // 8852, port C
+                return Keyboard::GetPortC();
 
-            default: return 0xFF;
+            case 0x06:  // 8852, port B
+                return (Keyboard::GetPortA() == portA) ? Keyboard::GetPortB() : 0x7F;
+
+            default:
+                return 0xFF;
         }
     }
 
     void write_io(byte port, byte value)
     {
+        if (port == 0x07) // 8852, port A
+        {
+            portA = value;
+        }
     }
     
     std::string disassemble(word addr)
