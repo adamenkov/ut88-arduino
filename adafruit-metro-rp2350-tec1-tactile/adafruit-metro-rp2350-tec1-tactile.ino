@@ -52,6 +52,24 @@ UT88 ut88(display);
 
 
 void setup() {
+  gpio_init_mask(0xC000'01FF);
+  gpio_init(41);
+  gpio_init(42);
+  gpio_init(43);
+  gpio_init(44);
+  gpio_init(45);
+  gpio_init(46);
+
+  //DDRF = 0xFF;
+  gpio_set_dir_out_masked(0xFF);
+
+  //DDRK = 0x00;
+  //PORTK = 0xFF;
+#define PULLUP(pin) gpio_set_dir(pin, false); gpio_pull_up(pin)
+  PULLUP(8);
+  PULLUP(30); PULLUP(31); PULLUP(41); PULLUP(42); PULLUP(43); PULLUP(44); PULLUP(45); PULLUP(46);
+#undef PULLUP
+
   Serial.begin(115200);
   // while(!Serial);
   if (!display.begin()) { // Blink LED if insufficient RAM
