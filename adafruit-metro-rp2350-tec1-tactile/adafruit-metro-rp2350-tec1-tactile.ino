@@ -89,8 +89,14 @@ void setup() {
 
 
 void loop() {
+  //static uint16_t counter;
   if (ut88.tick())
   {
+    /*
+    if (++counter % 10000 == 0) {
+      Serial.println(ut88.disassemble(ut88.pc).c_str());
+    }
+    */
   }
   else
   {
